@@ -68,6 +68,37 @@ func Softmax(k tf32.Continuation, node int, a *tf32.V) bool {
 	return false
 }
 
+// Concat concats two tensors
+func Concat(k tf32.Continuation, node int, a, b *tf32.V) bool {
+	if len(a.S) != 2 || len(b.S) != 2 {
+		panic("tensor needs to have two dimensions")
+	}
+	if a.S[1] != b.S[1] {
+		panic("dimensions are not the same")
+	}
+	c := tf32.NewV(a.S[0]+b.S[0], a.S[1])
+	for i := 0; i < a.S[1]; i++ {
+		for j := 0; j < a.S[0]; j++ {
+			c.X = append(c.X, a.X[i*a.S[0]+j])
+		}
+		for j := 0; j < b.S[0]; j++ {
+			c.X = append(c.X, b.X[i*b.S[0]+j])
+		}
+	}
+	if k(&c) {
+		return true
+	}
+	for i := 0; i < a.S[1]; i++ {
+		for j := 0; j < a.S[0]; j++ {
+			a.D[i*a.S[0]+j] += c.D[i*c.S[0]+j]
+		}
+		for j := 0; j < b.S[0]; j++ {
+			b.D[i*b.S[0]+j] += c.D[i*c.S[0]+j+a.S[0]]
+		}
+	}
+	return false
+}
+
 func main() {
 	rnd := rand.New(rand.NewSource(1))
 	_ = rnd
@@ -102,9 +133,10 @@ func main() {
 	neg.X = append(neg.X, -1)
 
 	set := tf32.NewSet()
-	set.Add("a1", 4, 4)
+	set.Add("position", 4, len(fisher))
+	set.Add("a1", 8, 4)
 	set.Add("b1", 4, 1)
-	set.Add("a2", 4, 3)
+	set.Add("a2", len(fisher), 3)
 	set.Add("b2", 3, 1)
 
 	for _, w := range set.Weights {
@@ -127,11 +159,14 @@ func main() {
 	}
 
 	softmax := tf32.U(Softmax)
-	l1 := softmax(tf32.Add(tf32.Mul(set.Get("a1"), others.Get("input")), set.Get("b1")))
-	l2 := softmax(tf32.Add(tf32.Mul(set.Get("a2"), l1), set.Get("b2")))
+	concat := tf32.B(Concat)
+	l1 := softmax(tf32.Add(tf32.Mul(set.Get("a1"), concat(others.Get("input"), set.Get("position"))), set.Get("b1")))
+	l2 := softmax(tf32.Add(tf32.Mul(set.Get("a2"), softmax(tf32.Mul(l1, l1))), set.Get("b2")))
 	cost := tf32.Add(tf32.Add(tf32.Add(tf32.Add(tf32.Add(
-		tf32.Hadamard(others.Get("neg"), tf32.Avg(tf32.Entropy(softmax(tf32.SumRows(tf32.Entropy(l2)))))),
-		tf32.Avg(tf32.Entropy(softmax(tf32.Entropy(l2))))),
+		//tf32.Hadamard(others.Get("neg"), tf32.Avg(tf32.Entropy(softmax(tf32.SumRows(tf32.Entropy(l2)))))),
+		//tf32.Avg(tf32.Entropy(softmax(tf32.Entropy(l2))))),
+		tf32.Sum(tf32.Entropy(l1)),
+		tf32.Sum(tf32.Entropy(l2))),
 		// occam's razor
 		tf32.Avg(tf32.Entropy(softmax(set.Get("a1"))))),
 		tf32.Avg(tf32.Entropy(softmax(set.Get("a2"))))),
@@ -215,7 +250,7 @@ func main() {
 					max, index = value, j
 				}
 			}
-			fmt.Println(index, fisher[i].Label)
+			fmt.Println(a.X[i*3:i*3+3], index, fisher[i].Label)
 		}
 		return true
 	})
