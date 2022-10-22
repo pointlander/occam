@@ -217,12 +217,12 @@ func main() {
 	l2(func(a *tf32.V) bool {
 		for i := 0; i < len(fisher); i++ {
 			max, index := float32(0.0), 0
-			for j, value := range a.X[i*3 : i*3+3] {
+			for j, value := range a.X[i*4 : i*4+4] {
 				if value > max {
 					max, index = value, j
 				}
 			}
-			fmt.Println(a.X[i*3:i*3+3], index, fisher[i].Label)
+			fmt.Println(index, fisher[i].Label)
 		}
 		return true
 	})
