@@ -102,11 +102,11 @@ func main() {
 	neg.X = append(neg.X, -1)
 
 	set := tf32.NewSet()
-	set.Add("points", 4, 4)
+	set.Add("points", 4, 3)
 	set.Add("context", 4, len(fisher))
 	set.Add("a1", 8, 4)
 	set.Add("b1", 4, 1)
-	set.Add("a2", 4, 4)
+	set.Add("a2", 3, 4)
 	set.Add("b2", 4, 1)
 
 	for _, w := range set.Weights {
@@ -217,7 +217,7 @@ func main() {
 	l2(func(a *tf32.V) bool {
 		for i := 0; i < len(fisher); i++ {
 			max, index := float32(0.0), 0
-			for j, value := range a.X[i*4 : i*4+4] {
+			for j, value := range a.X[i*3 : i*3+3] {
 				if value > max {
 					max, index = value, j
 				}
