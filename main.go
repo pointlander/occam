@@ -102,10 +102,12 @@ func main() {
 	neg.X = append(neg.X, -1)
 
 	set := tf32.NewSet()
-	set.Add("a1", 4, 4)
+	set.Add("points", 4, 4)
+	set.Add("context", 4, len(fisher))
+	set.Add("a1", 8, 4)
 	set.Add("b1", 4, 1)
-	set.Add("a2", 4, 3)
-	set.Add("b2", 3, 1)
+	set.Add("a2", 4, 4)
+	set.Add("b2", 4, 1)
 
 	for _, w := range set.Weights {
 		if strings.HasPrefix(w.N, "b") {
@@ -127,8 +129,13 @@ func main() {
 	}
 
 	softmax := tf32.U(Softmax)
-	l1 := softmax(tf32.Add(tf32.Mul(set.Get("a1"), others.Get("input")), set.Get("b1")))
-	l2 := softmax(tf32.Add(tf32.Mul(set.Get("a2"), l1), set.Get("b2")))
+	l1 := tf32.Sigmoid(tf32.Add(tf32.Mul(set.Get("a1"), tf32.Concat(others.Get("input"), set.Get("context"))), set.Get("b1")))
+	l2 := tf32.Mul(set.Get("points"), l1)
+	l3 := tf32.Add(tf32.Mul(set.Get("a2"), l2), set.Get("b2"))
+	//l3 := softmax(tf32.Add(tf32.Mul(set.Get("a2"), tf32.T(tf32.Mul(l2, l1))), set.Get("b2")))
+	cost := tf32.Add(tf32.Sum(tf32.Entropy(softmax(l2))), tf32.Sum(tf32.Quadratic(others.Get("input"), l3)))
+	/*l1 := softmax(tf32.Add(tf32.Mul(set.Get("a1"), others.Get("input")), set.Get("b1")))
+	l2 := softmax(tf32.Add(tf32.Mul(set.Get("a112"), l1), set.Get("b2")))
 	cost := tf32.Add(tf32.Add(tf32.Add(tf32.Add(tf32.Add(
 		tf32.Hadamard(others.Get("neg"), tf32.Avg(tf32.Entropy(softmax(tf32.SumRows(tf32.Entropy(l2)))))),
 		tf32.Avg(tf32.Entropy(softmax(tf32.Entropy(l2))))),
@@ -136,7 +143,7 @@ func main() {
 		tf32.Avg(tf32.Entropy(softmax(set.Get("a1"))))),
 		tf32.Avg(tf32.Entropy(softmax(set.Get("a2"))))),
 		tf32.Avg(tf32.Entropy(softmax(set.Get("b1"))))),
-		tf32.Avg(tf32.Entropy(softmax(set.Get("b2")))))
+		tf32.Avg(tf32.Entropy(softmax(set.Get("b2")))))*/
 
 	i, start := 1, time.Now()
 	eta := float32(.001)
@@ -215,7 +222,7 @@ func main() {
 					max, index = value, j
 				}
 			}
-			fmt.Println(index, fisher[i].Label)
+			fmt.Println(a.X[i*3:i*3+3], index, fisher[i].Label)
 		}
 		return true
 	})
