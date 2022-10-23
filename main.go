@@ -70,7 +70,6 @@ func Softmax(k tf32.Continuation, node int, a *tf32.V) bool {
 
 func main() {
 	rnd := rand.New(rand.NewSource(1))
-	_ = rnd
 
 	datum, err := iris.Load()
 	if err != nil {
@@ -90,24 +89,12 @@ func main() {
 	}
 
 	others := tf32.NewSet()
-	others.Add("input", 4, len(fisher))
-	others.Add("neg", 1, 1)
+	others.Add("input", 4, 1)
 	input := others.ByName["input"]
-	for _, value := range fisher {
-		for _, measure := range value.Measures {
-			input.X = append(input.X, float32(measure/max))
-		}
-	}
-	neg := others.ByName["neg"]
-	neg.X = append(neg.X, -1)
+	input.X = input.X[:cap(input.X)]
 
 	set := tf32.NewSet()
 	set.Add("points", 4, 3)
-	set.Add("context", 4, len(fisher))
-	set.Add("a1", 8, 4)
-	set.Add("b1", 4, 1)
-	set.Add("a2", 3, 4)
-	set.Add("b2", 4, 1)
 
 	for _, w := range set.Weights {
 		if strings.HasPrefix(w.N, "b") {
@@ -129,21 +116,9 @@ func main() {
 	}
 
 	softmax := tf32.U(Softmax)
-	l1 := tf32.Sigmoid(tf32.Add(tf32.Mul(set.Get("a1"), tf32.Concat(others.Get("input"), set.Get("context"))), set.Get("b1")))
-	l2 := tf32.Mul(set.Get("points"), l1)
-	l3 := tf32.Add(tf32.Mul(set.Get("a2"), l2), set.Get("b2"))
-	//l3 := softmax(tf32.Add(tf32.Mul(set.Get("a2"), tf32.T(tf32.Mul(l2, l1))), set.Get("b2")))
-	cost := tf32.Add(tf32.Sum(tf32.Entropy(softmax(l2))), tf32.Sum(tf32.Quadratic(others.Get("input"), l3)))
-	/*l1 := softmax(tf32.Add(tf32.Mul(set.Get("a1"), others.Get("input")), set.Get("b1")))
-	l2 := softmax(tf32.Add(tf32.Mul(set.Get("a112"), l1), set.Get("b2")))
-	cost := tf32.Add(tf32.Add(tf32.Add(tf32.Add(tf32.Add(
-		tf32.Hadamard(others.Get("neg"), tf32.Avg(tf32.Entropy(softmax(tf32.SumRows(tf32.Entropy(l2)))))),
-		tf32.Avg(tf32.Entropy(softmax(tf32.Entropy(l2))))),
-		// occam's razor
-		tf32.Avg(tf32.Entropy(softmax(set.Get("a1"))))),
-		tf32.Avg(tf32.Entropy(softmax(set.Get("a2"))))),
-		tf32.Avg(tf32.Entropy(softmax(set.Get("b1"))))),
-		tf32.Avg(tf32.Entropy(softmax(set.Get("b2")))))*/
+	l1 := tf32.Mul(set.Get("points"), others.Get("input"))
+	out := softmax(l1)
+	cost := tf32.Sum(tf32.Entropy(out))
 
 	i, start := 1, time.Now()
 	eta := float32(.001)
@@ -155,7 +130,12 @@ func main() {
 		return float32(y)
 	}
 	points := make(plotter.XYs, 0, 8)
-	for i < 8*1024 {
+	for i < 1024 {
+		index := rnd.Intn(len(fisher))
+		sample := fisher[index]
+		for i, measure := range sample.Measures {
+			input.X[i] = float32(measure / max)
+		}
 		total := tf32.Gradient(cost).X[0]
 
 		b1, b2 := pow(B1), pow(B2)
@@ -207,23 +187,21 @@ func main() {
 
 	set.Save("set.w", 0, 0)
 
-	for _, value := range fisher {
-		for j, measure := range value.Measures {
-			input.X[j] = float32(measure)
+	for i := 0; i < len(fisher); i++ {
+		sample := fisher[i]
+		for i, measure := range sample.Measures {
+			input.X[i] = float32(measure / max)
 		}
-
-	}
-
-	l2(func(a *tf32.V) bool {
-		for i := 0; i < len(fisher); i++ {
+		out(func(a *tf32.V) bool {
 			max, index := float32(0.0), 0
-			for j, value := range a.X[i*3 : i*3+3] {
+			for j, value := range a.X {
 				if value > max {
 					max, index = value, j
 				}
 			}
-			fmt.Println(index, fisher[i].Label)
-		}
-		return true
-	})
+			fmt.Println(a.X, index, fisher[i].Label)
+			return true
+		})
+	}
+
 }
