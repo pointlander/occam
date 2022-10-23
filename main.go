@@ -94,7 +94,7 @@ func main() {
 	input.X = input.X[:cap(input.X)]
 
 	set := tf32.NewSet()
-	set.Add("points", 4, 3)
+	set.Add("points", 4, 150)
 
 	for _, w := range set.Weights {
 		if strings.HasPrefix(w.N, "b") {
@@ -199,7 +199,7 @@ func main() {
 					max, index = value, j
 				}
 			}
-			fmt.Println(a.X, index, fisher[i].Label)
+			fmt.Println(index, fisher[i].Label)
 			return true
 		})
 	}
