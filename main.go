@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"sort"
 	"strings"
 	"time"
 
@@ -95,9 +96,10 @@ func main() {
 
 	set := tf32.NewSet()
 	set.Add("points", 4, 150)
+	point := set.ByName["points"]
 
 	for _, w := range set.Weights {
-		if strings.HasPrefix(w.N, "b") {
+		if strings.HasPrefix(w.N, "b") || strings.HasPrefix(w.N, "points") {
 			w.X = w.X[:cap(w.X)]
 			w.States = make([][]float32, StateTotal)
 			for i := range w.States {
@@ -112,6 +114,12 @@ func main() {
 		w.States = make([][]float32, StateTotal)
 		for i := range w.States {
 			w.States[i] = make([]float32, len(w.X))
+		}
+	}
+
+	for i, value := range fisher {
+		for j, measure := range value.Measures {
+			point.X[4*i+j] = float32(measure)
 		}
 	}
 
@@ -130,7 +138,7 @@ func main() {
 		return float32(y)
 	}
 	points := make(plotter.XYs, 0, 8)
-	for i < 1024 {
+	for i < 8*1024 {
 		index := rnd.Intn(len(fisher))
 		sample := fisher[index]
 		for i, measure := range sample.Measures {
@@ -187,19 +195,30 @@ func main() {
 
 	set.Save("set.w", 0, 0)
 
+	type Rank struct {
+		Index int
+		Rank  float32
+	}
 	for i := 0; i < len(fisher); i++ {
 		sample := fisher[i]
 		for i, measure := range sample.Measures {
 			input.X[i] = float32(measure / max)
 		}
 		out(func(a *tf32.V) bool {
-			max, index := float32(0.0), 0
+			max := make([]Rank, 0, 150)
 			for j, value := range a.X {
-				if value > max {
-					max, index = value, j
-				}
+				max = append(max, Rank{
+					Index: j,
+					Rank:  value,
+				})
 			}
-			fmt.Println(index, fisher[i].Label)
+			sort.Slice(max, func(i, j int) bool {
+				return max[i].Rank > max[j].Rank
+			})
+			for _, value := range max[:3] {
+				fmt.Printf("%d ", value.Index)
+			}
+			fmt.Println(fisher[i].Label)
 			return true
 		})
 	}
