@@ -199,13 +199,18 @@ func main() {
 		Index int
 		Rank  float32
 	}
+	type Label struct {
+		Ranks []Rank
+		Label string
+	}
+	labels := make([]Label, 0, len(fisher))
 	for i := 0; i < len(fisher); i++ {
 		sample := fisher[i]
 		for i, measure := range sample.Measures {
 			input.X[i] = float32(measure / max)
 		}
 		out(func(a *tf32.V) bool {
-			max := make([]Rank, 0, 150)
+			max := make([]Rank, 0, len(fisher))
 			for j, value := range a.X {
 				max = append(max, Rank{
 					Index: j,
@@ -215,12 +220,27 @@ func main() {
 			sort.Slice(max, func(i, j int) bool {
 				return max[i].Rank > max[j].Rank
 			})
-			for _, value := range max[:3] {
-				fmt.Printf("%d ", value.Index)
-			}
-			fmt.Println(fisher[i].Label)
+			labels = append(labels, Label{
+				Ranks: max,
+				Label: fisher[i].Label,
+			})
 			return true
 		})
 	}
-
+	sort.Slice(labels, func(i, j int) bool {
+		index := 0
+		for labels[i].Ranks[index].Index == labels[j].Ranks[index].Index {
+			index++
+			if index == len(fisher) {
+				return false
+			}
+		}
+		return labels[i].Ranks[index].Index < labels[j].Ranks[index].Index
+	})
+	for _, label := range labels {
+		for _, rank := range label.Ranks[:3] {
+			fmt.Printf("%d ", rank.Index)
+		}
+		fmt.Println(label.Label)
+	}
 }
