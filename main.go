@@ -210,18 +210,18 @@ func main() {
 			input.X[i] = float32(measure / max)
 		}
 		out(func(a *tf32.V) bool {
-			max := make([]Rank, 0, len(fisher))
+			ranks := make([]Rank, 0, len(fisher))
 			for j, value := range a.X {
-				max = append(max, Rank{
+				ranks = append(ranks, Rank{
 					Index: j,
 					Rank:  value,
 				})
 			}
-			sort.Slice(max, func(i, j int) bool {
-				return max[i].Rank > max[j].Rank
+			sort.Slice(ranks, func(i, j int) bool {
+				return ranks[i].Rank > ranks[j].Rank
 			})
 			labels = append(labels, Label{
-				Ranks: max,
+				Ranks: ranks,
 				Label: fisher[i].Label,
 			})
 			return true
@@ -238,8 +238,8 @@ func main() {
 		return labels[i].Ranks[index].Index < labels[j].Ranks[index].Index
 	})
 	for _, label := range labels {
-		for _, rank := range label.Ranks[:3] {
-			fmt.Printf("%d ", rank.Index)
+		for _, rank := range label.Ranks[:18] {
+			fmt.Printf("%03d ", rank.Index)
 		}
 		fmt.Println(label.Label)
 	}
