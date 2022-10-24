@@ -124,9 +124,10 @@ func main() {
 	}
 
 	softmax := tf32.U(Softmax)
-	l1 := tf32.Hadamard(tf32.T(set.Get("points")), tf32.Mul(set.Get("points"), others.Get("input")))
+	l1 := tf32.Mul(set.Get("points"), others.Get("input"))
+	l2 := tf32.Hadamard(tf32.T(set.Get("points")), l1)
 	out := softmax(l1)
-	cost := tf32.Sum(tf32.Entropy(out))
+	cost := tf32.Sum(tf32.Entropy(softmax(l2)))
 
 	i, start := 1, time.Now()
 	eta := float32(.001)
