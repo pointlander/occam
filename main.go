@@ -124,10 +124,9 @@ func main() {
 	}
 
 	softmax := tf32.U(Softmax)
-	l1 := tf32.Mul(set.Get("points"), others.Get("input"))
-	l2 := tf32.Hadamard(tf32.T(set.Get("points")), l1)
-	out := softmax(l1)
-	cost := tf32.Sum(tf32.Entropy(softmax(l2)))
+	l1 := softmax(tf32.Mul(set.Get("points"), others.Get("input")))
+	l2 := softmax(tf32.Mul(tf32.T(set.Get("points")), l1))
+	cost := tf32.Entropy(l2)
 
 	i, start := 1, time.Now()
 	eta := float32(.001)
@@ -210,7 +209,7 @@ func main() {
 		for i, measure := range sample.Measures {
 			input.X[i] = float32(measure / max)
 		}
-		out(func(a *tf32.V) bool {
+		l1(func(a *tf32.V) bool {
 			ranks := make([]Rank, 0, len(fisher))
 			for j, value := range a.X {
 				ranks = append(ranks, Rank{
