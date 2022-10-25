@@ -237,10 +237,31 @@ func main() {
 		}
 		return labels[i].Ranks[index].Index < labels[j].Ranks[index].Index
 	})
-	for _, label := range labels {
+	same := 0
+	for i, label := range labels {
+		max, index := 0, 0
+		for j, l := range labels {
+			if i == j {
+				continue
+			}
+			total := 0
+			for k, value := range label.Ranks {
+				a, b := value.Index, l.Ranks[k].Index
+				if a == b {
+					total++
+				}
+			}
+			if total > max {
+				max, index = total, j
+			}
+		}
 		for _, rank := range label.Ranks[:18] {
 			fmt.Printf("%03d ", rank.Index)
 		}
-		fmt.Println(label.Label)
+		fmt.Println(label.Label, labels[index].Label)
+		if label.Label == labels[index].Label {
+			same++
+		}
 	}
+	fmt.Println(same, len(fisher))
 }
