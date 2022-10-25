@@ -138,7 +138,7 @@ func main() {
 		return float32(y)
 	}
 	points := make(plotter.XYs, 0, 8)
-	for i < 8*1024 {
+	for i < 4*1024 {
 		index := rnd.Intn(len(fisher))
 		sample := fisher[index]
 		for i, measure := range sample.Measures {
@@ -263,5 +263,5 @@ func main() {
 			same++
 		}
 	}
-	fmt.Println(same, len(fisher))
+	fmt.Println(same, len(fisher), float64(same)/float64(len(fisher)))
 }
