@@ -72,32 +72,26 @@ func Softmax(k tf32.Continuation, node int, a *tf32.V) bool {
 func main() {
 	rnd := rand.New(rand.NewSource(1))
 
+	// Load the iris data set
 	datum, err := iris.Load()
 	if err != nil {
 		panic(err)
 	}
 	fisher := datum.Fisher
-	max := 0.0
-	for _, value := range fisher {
-		for _, measure := range value.Measures {
-			if measure < 0 {
-				measure = -measure
-			}
-			if measure > max {
-				max = measure
-			}
-		}
-	}
+	length := len(fisher)
 
+	// Create the input data matrix
 	others := tf32.NewSet()
 	others.Add("input", 4, 1)
 	input := others.ByName["input"]
 	input.X = input.X[:cap(input.X)]
 
+	// Create the weight data matrix
 	set := tf32.NewSet()
 	set.Add("points", 4, 150)
 	point := set.ByName["points"]
 
+	// Initialize the weights
 	for _, w := range set.Weights {
 		if strings.HasPrefix(w.N, "b") || strings.HasPrefix(w.N, "points") {
 			w.X = w.X[:cap(w.X)]
@@ -117,17 +111,20 @@ func main() {
 		}
 	}
 
+	// Set point weights to the iris data
 	for i, value := range fisher {
 		for j, measure := range value.Measures {
 			point.X[4*i+j] = float32(measure)
 		}
 	}
 
+	// The neural network is the attention model from attention is all you need
 	softmax := tf32.U(Softmax)
 	l1 := softmax(tf32.Mul(set.Get("points"), others.Get("input")))
 	l2 := softmax(tf32.Mul(tf32.T(set.Get("points")), l1))
 	cost := tf32.Entropy(l2)
 
+	// Initialize the stochastic gradient descent loop
 	i, start := 1, time.Now()
 	eta := float32(.001)
 	pow := func(x float32) float32 {
@@ -138,18 +135,22 @@ func main() {
 		return float32(y)
 	}
 	points := make(plotter.XYs, 0, 8)
-	for i < 4*1024 {
-		index := rnd.Intn(len(fisher))
+	// The stochastic gradient descent loop
+	for i < 8*1024 {
+		// Randomly select a load the input
+		index := rnd.Intn(length)
 		sample := fisher[index]
 		for i, measure := range sample.Measures {
-			input.X[i] = float32(measure / max)
+			input.X[i] = float32(measure)
 		}
+		// Calculate the gradients
 		total := tf32.Gradient(cost).X[0]
 
+		// Update the point weights with the partial derivatives using adam
 		b1, b2 := pow(B1), pow(B2)
 		for j, w := range set.Weights {
 			for k, d := range w.D {
-				g := d / float32(len(fisher))
+				g := d
 				m := B1*w.States[StateM][k] + (1-B1)*g
 				v := B2*w.States[StateV][k] + (1-B2)*g*g
 				w.States[StateM][k] = m
@@ -160,6 +161,7 @@ func main() {
 			}
 		}
 
+		// Housekeeping
 		end := time.Since(start)
 		fmt.Println(i, total, end)
 		set.Zero()
@@ -174,6 +176,7 @@ func main() {
 		i++
 	}
 
+	// Plot the cost
 	p := plot.New()
 
 	p.Title.Text = "epochs vs cost"
@@ -195,58 +198,63 @@ func main() {
 
 	set.Save("set.w", 0, 0)
 
-	type Rank struct {
+	// For each input, label and sort the points in terms of distance to the input
+	type Point struct {
 		Index int
 		Rank  float32
 	}
-	type Label struct {
-		Ranks []Rank
-		Label string
+	type Input struct {
+		Points []Point
+		Label  string
 	}
-	labels := make([]Label, 0, len(fisher))
-	for i := 0; i < len(fisher); i++ {
+	inputs := make([]Input, 0, length)
+	for i := 0; i < length; i++ {
+		// Load the input
 		sample := fisher[i]
 		for i, measure := range sample.Measures {
-			input.X[i] = float32(measure / max)
+			input.X[i] = float32(measure)
 		}
+		// Calculate the l1 output of the neural network
 		l1(func(a *tf32.V) bool {
-			ranks := make([]Rank, 0, len(fisher))
+			points := make([]Point, 0, length)
 			for j, value := range a.X {
-				ranks = append(ranks, Rank{
+				points = append(points, Point{
 					Index: j,
 					Rank:  value,
 				})
 			}
-			sort.Slice(ranks, func(i, j int) bool {
-				return ranks[i].Rank > ranks[j].Rank
+			sort.Slice(points, func(i, j int) bool {
+				return points[i].Rank > points[j].Rank
 			})
-			labels = append(labels, Label{
-				Ranks: ranks,
-				Label: fisher[i].Label,
+			inputs = append(inputs, Input{
+				Points: points,
+				Label:  fisher[i].Label,
 			})
 			return true
 		})
 	}
-	sort.Slice(labels, func(i, j int) bool {
+	// Sort the inputs by the point indexes
+	sort.Slice(inputs, func(i, j int) bool {
 		index := 0
-		for labels[i].Ranks[index].Index == labels[j].Ranks[index].Index {
+		for inputs[i].Points[index].Index == inputs[j].Points[index].Index {
 			index++
-			if index == len(fisher) {
+			if index == length {
 				return false
 			}
 		}
-		return labels[i].Ranks[index].Index < labels[j].Ranks[index].Index
+		return inputs[i].Points[index].Index < inputs[j].Points[index].Index
 	})
+	// Count how many inputs have the same label as their nearest neighbor
 	same := 0
-	for i, label := range labels {
+	for i, label := range inputs {
 		max, index := 0, 0
-		for j, l := range labels {
+		for j, l := range inputs {
 			if i == j {
 				continue
 			}
 			total := 0
-			for k, value := range label.Ranks {
-				a, b := value.Index, l.Ranks[k].Index
+			for k, value := range label.Points {
+				a, b := value.Index, l.Points[k].Index
 				if a == b {
 					total++
 				}
@@ -255,13 +263,13 @@ func main() {
 				max, index = total, j
 			}
 		}
-		for _, rank := range label.Ranks[:18] {
+		for _, rank := range label.Points[:18] {
 			fmt.Printf("%03d ", rank.Index)
 		}
-		fmt.Println(label.Label, labels[index].Label)
-		if label.Label == labels[index].Label {
+		fmt.Println(label.Label, inputs[index].Label)
+		if label.Label == inputs[index].Label {
 			same++
 		}
 	}
-	fmt.Println(same, len(fisher), float64(same)/float64(len(fisher)))
+	fmt.Println(same, length, float64(same)/float64(length))
 }
