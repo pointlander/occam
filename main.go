@@ -9,7 +9,6 @@ import (
 	"math"
 	"math/rand"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/pointlander/datum/iris"
@@ -27,6 +26,8 @@ const (
 	B2 = 0.999
 	// S is the scaling factor for the softmax
 	S = 1.0 - 1e-300
+	// Eta is the learning rate
+	Eta = .001
 )
 
 const (
@@ -69,111 +70,44 @@ func Softmax(k tf32.Continuation, node int, a *tf32.V) bool {
 	return false
 }
 
+// Network is a clustering neural network
+type Network struct {
+	Rnd    *rand.Rand
+	Fisher []iris.Iris
+	Length int
+	Set    tf32.Set
+	Others tf32.Set
+	Input  *tf32.V
+	Point  *tf32.V
+	L1     tf32.Meta
+	L2     tf32.Meta
+	Cost   tf32.Meta
+	I      int
+	Points plotter.XYs
+}
+
+func (n *Network) pow(x float32) float32 {
+	y := math.Pow(float64(x), float64(n.I))
+	if math.IsNaN(y) || math.IsInf(y, 0) {
+		return 0
+	}
+	return float32(y)
+}
+
 func main() {
-	rnd := rand.New(rand.NewSource(1))
+	n := NewNetwork()
 
-	// Load the iris data set
-	datum, err := iris.Load()
-	if err != nil {
-		panic(err)
-	}
-	fisher := datum.Fisher
-	length := len(fisher)
-
-	// Create the input data matrix
-	others := tf32.NewSet()
-	others.Add("input", 4, 1)
-	input := others.ByName["input"]
-	input.X = input.X[:cap(input.X)]
-
-	// Create the weight data matrix
-	set := tf32.NewSet()
-	set.Add("points", 4, 150)
-	point := set.ByName["points"]
-
-	// Initialize the weights
-	for _, w := range set.Weights {
-		if strings.HasPrefix(w.N, "b") || strings.HasPrefix(w.N, "points") {
-			w.X = w.X[:cap(w.X)]
-			w.States = make([][]float32, StateTotal)
-			for i := range w.States {
-				w.States[i] = make([]float32, len(w.X))
-			}
-			continue
-		}
-		factor := math.Sqrt(2.0 / float64(w.S[0]))
-		for i := 0; i < cap(w.X); i++ {
-			w.X = append(w.X, float32(rnd.NormFloat64()*factor))
-		}
-		w.States = make([][]float32, StateTotal)
-		for i := range w.States {
-			w.States[i] = make([]float32, len(w.X))
-		}
-	}
-
-	// Set point weights to the iris data
-	for i, value := range fisher {
-		for j, measure := range value.Measures {
-			point.X[4*i+j] = float32(measure)
-		}
-	}
-
-	// The neural network is the attention model from attention is all you need
-	softmax := tf32.U(Softmax)
-	l1 := softmax(tf32.Mul(set.Get("points"), others.Get("input")))
-	l2 := softmax(tf32.Mul(tf32.T(set.Get("points")), l1))
-	cost := tf32.Entropy(l2)
-
-	// Initialize the stochastic gradient descent loop
-	i, start := 1, time.Now()
-	eta := float32(.001)
-	pow := func(x float32) float32 {
-		y := math.Pow(float64(x), float64(i))
-		if math.IsNaN(y) || math.IsInf(y, 0) {
-			return 0
-		}
-		return float32(y)
-	}
-	points := make(plotter.XYs, 0, 8)
 	// The stochastic gradient descent loop
-	for i < 8*1024 {
+	for n.I < 8*1024 {
 		// Randomly select a load the input
-		index := rnd.Intn(length)
-		sample := fisher[index]
-		for i, measure := range sample.Measures {
-			input.X[i] = float32(measure)
-		}
-		// Calculate the gradients
-		total := tf32.Gradient(cost).X[0]
-
-		// Update the point weights with the partial derivatives using adam
-		b1, b2 := pow(B1), pow(B2)
-		for j, w := range set.Weights {
-			for k, d := range w.D {
-				g := d
-				m := B1*w.States[StateM][k] + (1-B1)*g
-				v := B2*w.States[StateV][k] + (1-B2)*g*g
-				w.States[StateM][k] = m
-				w.States[StateV][k] = v
-				mhat := m / (1 - b1)
-				vhat := v / (1 - b2)
-				set.Weights[j].X[k] -= eta * mhat / (float32(math.Sqrt(float64(vhat))) + 1e-8)
-			}
-		}
-
-		// Housekeeping
-		end := time.Since(start)
-		fmt.Println(i, total, end)
-		set.Zero()
-		others.Zero()
-		start = time.Now()
+		index := n.Rnd.Intn(n.Length)
+		sample := n.Fisher[index]
+		total := n.iterate(sample.Measures)
 
 		if math.IsNaN(float64(total)) {
 			fmt.Println(total)
 			break
 		}
-		points = append(points, plotter.XY{X: float64(i), Y: float64(total)})
-		i++
 	}
 
 	// Plot the cost
@@ -183,7 +117,7 @@ func main() {
 	p.X.Label.Text = "epochs"
 	p.Y.Label.Text = "cost"
 
-	scatter, err := plotter.NewScatter(points)
+	scatter, err := plotter.NewScatter(n.Points)
 	if err != nil {
 		panic(err)
 	}
@@ -196,8 +130,96 @@ func main() {
 		panic(err)
 	}
 
-	set.Save("set.w", 0, 0)
+	n.Set.Save("set.w", 0, 0)
 
+	n.analyzer()
+
+}
+
+func NewNetwork() *Network {
+	n := Network{
+		Rnd: rand.New(rand.NewSource(1)),
+		I:   1,
+	}
+
+	// Load the iris data set
+	datum, err := iris.Load()
+	if err != nil {
+		panic(err)
+	}
+	n.Fisher = datum.Fisher
+	n.Length = len(n.Fisher)
+
+	// Create the input data matrix
+	n.Others = tf32.NewSet()
+	n.Others.Add("input", 4, 1)
+	n.Input = n.Others.ByName["input"]
+	n.Input.X = n.Input.X[:cap(n.Input.X)]
+
+	// Create the weight data matrix
+	n.Set = tf32.NewSet()
+	n.Set.Add("points", 4, n.Length)
+	n.Point = n.Set.ByName["points"]
+	n.Point.X = n.Point.X[:cap(n.Point.X)]
+	n.Point.States = make([][]float32, StateTotal)
+	for i := range n.Point.States {
+		n.Point.States[i] = make([]float32, len(n.Point.X))
+	}
+
+	// Set point weights to the iris data
+	for i, value := range n.Fisher {
+		for j, measure := range value.Measures {
+			n.Point.X[4*i+j] = float32(measure)
+		}
+	}
+
+	// The neural network is the attention model from attention is all you need
+	softmax := tf32.U(Softmax)
+	n.L1 = softmax(tf32.Mul(n.Set.Get("points"), n.Others.Get("input")))
+	n.L2 = softmax(tf32.Mul(tf32.T(n.Set.Get("points")), n.L1))
+	n.Cost = tf32.Entropy(n.L2)
+
+	n.Points = make(plotter.XYs, 0, 8)
+
+	return &n
+}
+
+func (n *Network) iterate(data []float64) float32 {
+	for i, measure := range data {
+		n.Input.X[i] = float32(measure)
+	}
+
+	start := time.Now()
+	// Calculate the gradients
+	total := tf32.Gradient(n.Cost).X[0]
+
+	// Update the point weights with the partial derivatives using adam
+	b1, b2 := n.pow(B1), n.pow(B2)
+	for j, w := range n.Set.Weights {
+		for k, d := range w.D {
+			g := d
+			m := B1*w.States[StateM][k] + (1-B1)*g
+			v := B2*w.States[StateV][k] + (1-B2)*g*g
+			w.States[StateM][k] = m
+			w.States[StateV][k] = v
+			mhat := m / (1 - b1)
+			vhat := v / (1 - b2)
+			n.Set.Weights[j].X[k] -= Eta * mhat / (float32(math.Sqrt(float64(vhat))) + 1e-8)
+		}
+	}
+
+	// Housekeeping
+	end := time.Since(start)
+	fmt.Println(n.I, total, end)
+	n.Set.Zero()
+	n.Others.Zero()
+	n.Points = append(n.Points, plotter.XY{X: float64(n.I), Y: float64(total)})
+	n.I++
+
+	return total
+}
+
+func (n *Network) analyzer() {
 	// For each input, label and sort the points in terms of distance to the input
 	type Point struct {
 		Index int
@@ -207,16 +229,16 @@ func main() {
 		Points []Point
 		Label  string
 	}
-	inputs := make([]Input, 0, length)
-	for i := 0; i < length; i++ {
+	inputs := make([]Input, 0, n.Length)
+	for i := 0; i < n.Length; i++ {
 		// Load the input
-		sample := fisher[i]
+		sample := n.Fisher[i]
 		for i, measure := range sample.Measures {
-			input.X[i] = float32(measure)
+			n.Input.X[i] = float32(measure)
 		}
 		// Calculate the l1 output of the neural network
-		l1(func(a *tf32.V) bool {
-			points := make([]Point, 0, length)
+		n.L1(func(a *tf32.V) bool {
+			points := make([]Point, 0, n.Length)
 			for j, value := range a.X {
 				points = append(points, Point{
 					Index: j,
@@ -228,7 +250,7 @@ func main() {
 			})
 			inputs = append(inputs, Input{
 				Points: points,
-				Label:  fisher[i].Label,
+				Label:  n.Fisher[i].Label,
 			})
 			return true
 		})
@@ -238,7 +260,7 @@ func main() {
 		index := 0
 		for inputs[i].Points[index].Index == inputs[j].Points[index].Index {
 			index++
-			if index == length {
+			if index == n.Length {
 				return false
 			}
 		}
@@ -271,5 +293,5 @@ func main() {
 			same++
 		}
 	}
-	fmt.Println(same, length, float64(same)/float64(length))
+	fmt.Println(same, n.Length, float64(same)/float64(n.Length))
 }
