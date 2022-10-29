@@ -102,13 +102,13 @@ func NewNetwork(width, length int) *Network {
 
 	// Create the input data matrix
 	n.Others = tf32.NewSet()
-	n.Others.Add("input", 4, 1)
+	n.Others.Add("input", width, 1)
 	n.Input = n.Others.ByName["input"]
 	n.Input.X = n.Input.X[:cap(n.Input.X)]
 
 	// Create the weight data matrix
 	n.Set = tf32.NewSet()
-	n.Set.Add("points", 4, length)
+	n.Set.Add("points", width, length)
 	n.Point = n.Set.ByName["points"]
 	n.Point.X = n.Point.X[:cap(n.Point.X)]
 	n.Point.States = make([][]float32, StateTotal)
