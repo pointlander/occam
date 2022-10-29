@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package main
+package occam
 
 import (
 	"fmt"
@@ -13,10 +13,7 @@ import (
 
 	"github.com/pointlander/datum/iris"
 	"github.com/pointlander/gradient/tf32"
-	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"
-	"gonum.org/v1/plot/vg"
-	"gonum.org/v1/plot/vg/draw"
 )
 
 const (
@@ -73,7 +70,7 @@ func Softmax(k tf32.Continuation, node int, a *tf32.V) bool {
 // Network is a clustering neural network
 type Network struct {
 	Rnd    *rand.Rand
-	Fisher []iris.Iris
+	Width  int
 	Length int
 	Set    tf32.Set
 	Others tf32.Set
@@ -94,61 +91,14 @@ func (n *Network) pow(x float32) float32 {
 	return float32(y)
 }
 
-func main() {
-	n := NewNetwork()
-
-	// The stochastic gradient descent loop
-	for n.I < 8*1024 {
-		// Randomly select a load the input
-		index := n.Rnd.Intn(n.Length)
-		sample := n.Fisher[index]
-		total := n.iterate(sample.Measures)
-
-		if math.IsNaN(float64(total)) {
-			fmt.Println(total)
-			break
-		}
-	}
-
-	// Plot the cost
-	p := plot.New()
-
-	p.Title.Text = "epochs vs cost"
-	p.X.Label.Text = "epochs"
-	p.Y.Label.Text = "cost"
-
-	scatter, err := plotter.NewScatter(n.Points)
-	if err != nil {
-		panic(err)
-	}
-	scatter.GlyphStyle.Radius = vg.Length(1)
-	scatter.GlyphStyle.Shape = draw.CircleGlyph{}
-	p.Add(scatter)
-
-	err = p.Save(8*vg.Inch, 8*vg.Inch, "cost.png")
-	if err != nil {
-		panic(err)
-	}
-
-	n.Set.Save("set.w", 0, 0)
-
-	n.analyzer()
-
-}
-
-func NewNetwork() *Network {
+// Creates a new neural network
+func NewNetwork(width, length int) *Network {
 	n := Network{
-		Rnd: rand.New(rand.NewSource(1)),
-		I:   1,
+		Rnd:    rand.New(rand.NewSource(1)),
+		Width:  width,
+		Length: length,
+		I:      1,
 	}
-
-	// Load the iris data set
-	datum, err := iris.Load()
-	if err != nil {
-		panic(err)
-	}
-	n.Fisher = datum.Fisher
-	n.Length = len(n.Fisher)
 
 	// Create the input data matrix
 	n.Others = tf32.NewSet()
@@ -158,19 +108,12 @@ func NewNetwork() *Network {
 
 	// Create the weight data matrix
 	n.Set = tf32.NewSet()
-	n.Set.Add("points", 4, n.Length)
+	n.Set.Add("points", 4, length)
 	n.Point = n.Set.ByName["points"]
 	n.Point.X = n.Point.X[:cap(n.Point.X)]
 	n.Point.States = make([][]float32, StateTotal)
 	for i := range n.Point.States {
 		n.Point.States[i] = make([]float32, len(n.Point.X))
-	}
-
-	// Set point weights to the iris data
-	for i, value := range n.Fisher {
-		for j, measure := range value.Measures {
-			n.Point.X[4*i+j] = float32(measure)
-		}
 	}
 
 	// The neural network is the attention model from attention is all you need
@@ -184,7 +127,8 @@ func NewNetwork() *Network {
 	return &n
 }
 
-func (n *Network) iterate(data []float64) float32 {
+// Iterate does a gradient descent operation
+func (n *Network) Iterate(data []float64) float32 {
 	for i, measure := range data {
 		n.Input.X[i] = float32(measure)
 	}
@@ -219,7 +163,8 @@ func (n *Network) iterate(data []float64) float32 {
 	return total
 }
 
-func (n *Network) analyzer() {
+// Analyzer calculates properties of the network
+func (n *Network) Analyzer(fisher []iris.Iris) {
 	// For each input, label and sort the points in terms of distance to the input
 	type Point struct {
 		Index int
@@ -232,7 +177,7 @@ func (n *Network) analyzer() {
 	inputs := make([]Input, 0, n.Length)
 	for i := 0; i < n.Length; i++ {
 		// Load the input
-		sample := n.Fisher[i]
+		sample := fisher[i]
 		for i, measure := range sample.Measures {
 			n.Input.X[i] = float32(measure)
 		}
@@ -250,7 +195,7 @@ func (n *Network) analyzer() {
 			})
 			inputs = append(inputs, Input{
 				Points: points,
-				Label:  n.Fisher[i].Label,
+				Label:  fisher[i].Label,
 			})
 			return true
 		})
