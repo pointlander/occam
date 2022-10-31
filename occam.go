@@ -174,6 +174,31 @@ func (n *Network) Analyzer(fisher []iris.Iris) {
 		Points []Point
 		Label  string
 	}
+	type Node struct {
+		Nodes map[int]*Node
+		Ranks []float32
+		Label []string
+	}
+	var build func(input Input, depth int, node *Node)
+	build = func(input Input, depth int, node *Node) {
+		length := n.Length
+		if depth >= length {
+			return
+		}
+		if node.Nodes == nil {
+			node.Nodes = make(map[int]*Node)
+		}
+		n := node.Nodes[input.Points[depth].Index]
+		if n == nil {
+			n = &Node{}
+		}
+		n.Ranks = append(n.Ranks, input.Points[depth].Rank)
+		if depth == length-1 {
+			n.Label = append(n.Label, input.Label)
+		}
+		node.Nodes[input.Points[depth].Index] = n
+		build(input, depth+1, n)
+	}
 	inputs := make([]Input, 0, n.Length)
 	for i := 0; i < n.Length; i++ {
 		// Load the input
@@ -211,6 +236,12 @@ func (n *Network) Analyzer(fisher []iris.Iris) {
 		}
 		return inputs[i].Points[index].Index < inputs[j].Points[index].Index
 	})
+
+	node := &Node{}
+	for _, input := range inputs {
+		build(input, 0, node)
+	}
+
 	// Count how many inputs have the same label as their nearest neighbor
 	same := 0
 	for i, label := range inputs {
