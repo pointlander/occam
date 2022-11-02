@@ -6,11 +6,16 @@ package occam
 
 import (
 	"fmt"
+	"io"
 	"math"
 	"math/rand"
+	"os"
 	"sort"
 	"time"
 
+	"github.com/go-echarts/go-echarts/v2/charts"
+	"github.com/go-echarts/go-echarts/v2/components"
+	"github.com/go-echarts/go-echarts/v2/opts"
 	"github.com/pointlander/datum/iris"
 	"github.com/pointlander/gradient/tf32"
 	"gonum.org/v1/plot/plotter"
@@ -241,6 +246,64 @@ func (n *Network) Analyzer(fisher []iris.Iris) {
 	for _, input := range inputs {
 		build(input, 0, node)
 	}
+	var translate func(node *Node, tree *[]*opts.TreeData)
+	tree := make([]*opts.TreeData, 0, 8)
+	translate = func(node *Node, tree *[]*opts.TreeData) {
+		if node == nil || tree == nil {
+			return
+		}
+		if len(node.Nodes) == 1 {
+			for _, n := range node.Nodes {
+				translate(n, tree)
+			}
+			return
+		}
+		for i, n := range node.Nodes {
+			t := opts.TreeData{
+				Name:     fmt.Sprintf("%d", i),
+				Children: make([]*opts.TreeData, 0, 8),
+			}
+			translate(n, &t.Children)
+			*tree = append(*tree, &t)
+		}
+	}
+	translate(node, &tree)
+	t := []opts.TreeData{
+		{
+			Name:     "Root",
+			Children: tree,
+		},
+	}
+	graph := charts.NewTree()
+	graph.SetGlobalOptions(
+		charts.WithInitializationOpts(opts.Initialization{Width: "100%", Height: "500vh"}),
+		charts.WithTitleOpts(opts.Title{Title: "basic tree example"}),
+		charts.WithTooltipOpts(opts.Tooltip{Show: false}),
+	)
+	graph.AddSeries("tree", t).
+		SetSeriesOptions(
+			charts.WithTreeOpts(
+				opts.TreeChart{
+					Layout:           "orthogonal",
+					Orient:           "LR",
+					InitialTreeDepth: -1,
+					Leaves: &opts.TreeLeaves{
+						Label: &opts.Label{Show: true, Position: "right", Color: "Black"},
+					},
+				},
+			),
+			charts.WithLabelOpts(opts.Label{Show: true, Position: "top", Color: "Black"}),
+		)
+	page := components.NewPage()
+	page.AddCharts(
+		graph,
+	)
+	f, err := os.Create("tree.html")
+	if err != nil {
+		panic(err)
+
+	}
+	page.Render(io.MultiWriter(f))
 
 	// Count how many inputs have the same label as their nearest neighbor
 	same := 0
