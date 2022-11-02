@@ -253,7 +253,18 @@ func (n *Network) Analyzer(fisher []iris.Iris) {
 			return
 		}
 		if len(node.Nodes) == 1 {
-			for _, n := range node.Nodes {
+			for i, n := range node.Nodes {
+				if n.Nodes == nil {
+					label := ""
+					for _, l := range n.Label {
+						label += fmt.Sprintf("%s-", l)
+					}
+					t := opts.TreeData{
+						Name: fmt.Sprintf("%d-%s", i, label),
+					}
+					*tree = append(*tree, &t)
+					break
+				}
 				translate(n, tree)
 			}
 			return
