@@ -5,9 +5,11 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"math"
 
+	"github.com/pointlander/gradient/tf32"
 	"github.com/pointlander/occam"
 
 	"github.com/pointlander/datum/iris"
@@ -17,7 +19,70 @@ import (
 	"gonum.org/v1/plot/vg/draw"
 )
 
+var (
+	FlagRNN = flag.Bool("rnn", false, "rnn mode")
+)
+
 func main() {
+	flag.Parse()
+
+	if *FlagRNN {
+		n := occam.NewNetwork(8, 8)
+		state := make([]float64, 8)
+		for i := 0; i < 8; i++ {
+			for j := 0; j < 8; j++ {
+				n.Point.X[8*i+j] = n.Rnd.Float32()
+			}
+		}
+
+		state[0] = 1
+		for i := 0; i < 8*1024; i++ {
+			total := n.Iterate(state)
+
+			if math.IsNaN(float64(total)) {
+				fmt.Println(total)
+				break
+			}
+
+			n.L2(func(a *tf32.V) bool {
+				for i, value := range a.X {
+					state[i] = float64(value)
+				}
+				return true
+			})
+			fmt.Println(state)
+			state[0] = n.Rnd.Float64()
+			state[2] = n.Rnd.Float64()
+		}
+		for i := 0; i < 8; i++ {
+			for j := 0; j < 8; j++ {
+				fmt.Printf("%f ", n.Point.X[i*8+j])
+			}
+			fmt.Printf("\n")
+		}
+
+		// Plot the cost
+		p := plot.New()
+
+		p.Title.Text = "epochs vs cost"
+		p.X.Label.Text = "epochs"
+		p.Y.Label.Text = "cost"
+
+		scatter, err := plotter.NewScatter(n.Points)
+		if err != nil {
+			panic(err)
+		}
+		scatter.GlyphStyle.Radius = vg.Length(1)
+		scatter.GlyphStyle.Shape = draw.CircleGlyph{}
+		p.Add(scatter)
+
+		err = p.Save(8*vg.Inch, 8*vg.Inch, "cost.png")
+		if err != nil {
+			panic(err)
+		}
+		return
+	}
+
 	// Load the iris data set
 	datum, err := iris.Load()
 	if err != nil {
