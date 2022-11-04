@@ -5,9 +5,13 @@
 package main
 
 import (
+	"encoding/binary"
 	"flag"
 	"fmt"
+	"io"
 	"math"
+	"math/rand"
+	"os"
 
 	"github.com/pointlander/gradient/tf32"
 	"github.com/pointlander/occam"
@@ -20,18 +24,63 @@ import (
 )
 
 var (
+	// FlagRNN uses the rnn mode
 	FlagRNN = flag.Bool("rnn", false, "rnn mode")
+	// FlagRND mixes random information into the rnn
+	FlagRND = flag.Bool("rnd", false, "rnd mode")
 )
+
+// Source is a true random number source
+type Source struct {
+	Reader io.Reader
+}
+
+// NewSource creates a new true random source
+func NewSource() *Source {
+	in, err := os.Open("/dev/random")
+	if err != nil {
+		panic(err)
+	}
+	return &Source{
+		Reader: in,
+	}
+}
+
+// Int63 returns a true random int64
+func (s *Source) Int63() int64 {
+	return int64(s.Uint64() & ((1 << 63) - 1))
+}
+
+// Seed is a noop
+func (s *Source) Seed(seed int64) {
+
+}
+
+// Uint64 returns a true random uint64
+func (s *Source) Uint64() uint64 {
+	data := make([]byte, 8)
+	_, err := io.ReadFull(s.Reader, data)
+	if err != nil {
+		panic(err)
+	}
+	return binary.BigEndian.Uint64(data)
+}
 
 func main() {
 	flag.Parse()
 
 	if *FlagRNN {
+		rnda, rndb := rand.New(rand.NewSource(1)), rand.New(rand.NewSource(2))
+		//rnda, rndb := rand.New(NewSource()), rand.New(NewSource())
 		n := occam.NewNetwork(8, 8)
 		state := make([]float64, 8)
 		for i := 0; i < 8; i++ {
 			for j := 0; j < 8; j++ {
-				n.Point.X[8*i+j] = n.Rnd.Float32()
+				if *FlagRND {
+					n.Point.X[8*i+j] = 1
+				} else {
+					n.Point.X[8*i+j] = n.Rnd.Float32()
+				}
 			}
 		}
 
@@ -51,8 +100,10 @@ func main() {
 				return true
 			})
 			fmt.Println(state)
-			state[0] = n.Rnd.Float64()
-			state[2] = n.Rnd.Float64()
+			if *FlagRND {
+				state[0] = rnda.Float64()
+				state[1] = rndb.Float64()
+			}
 		}
 		for i := 0; i < 8; i++ {
 			for j := 0; j < 8; j++ {
