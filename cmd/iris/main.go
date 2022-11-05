@@ -5,7 +5,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"math"
 
@@ -18,14 +17,7 @@ import (
 	"gonum.org/v1/plot/vg/draw"
 )
 
-var (
-	// FlagRNN uses the rnn mode
-	FlagRNN = flag.Bool("rnn", false, "rnn mode")
-)
-
 func main() {
-	flag.Parse()
-
 	// Load the iris data set
 	datum, err := iris.Load()
 	if err != nil {
