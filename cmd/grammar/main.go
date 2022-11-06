@@ -14,7 +14,6 @@ import (
 
 	"github.com/pointlander/gradient/tf32"
 
-	"github.com/pointlander/datum/iris"
 	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"
 	"gonum.org/v1/plot/vg"
@@ -42,7 +41,7 @@ const (
 )
 
 // Softmax is the softmax function for big numbers
-func Softmax(k tf32.Continuation, node int, a *tf32.V) bool {
+func Softmax(k tf32.Continuation, node int, a *tf32.V, options ...map[string]interface{}) bool {
 	c, size, width := tf32.NewV(a.S...), len(a.X), a.S[0]
 	max := float32(0)
 	for _, v := range a.X {
@@ -80,22 +79,19 @@ func main() {
 		panic(err)
 	}
 	en := strings.Split(string(data), "\n")
-	english := make([][]byte, 0, len(en))
+	english, length := make([][]byte, 0, len(en)), 0
 	for _, value := range en {
 		value = strings.TrimSpace(value)
 		if value != "" {
-			english = append(english, []byte(value))
+			line := []byte(value)
+			if len(line) > length {
+				length = len(line)
+			}
+			english = append(english, line)
 		}
 	}
 
-	// Load the iris data set
-	datum, err := iris.Load()
-	if err != nil {
-		panic(err)
-	}
-	fisher := datum.Fisher
-	length := len(fisher)
-	width := 4
+	width := 256
 
 	i := 1
 	pow := func(x float32) float32 {
@@ -106,45 +102,55 @@ func main() {
 		return float32(y)
 	}
 
-	// Create the input data matrix
-	others := tf32.NewSet()
-	others.Add("input", width, 1)
-	input := others.ByName["input"]
-	input.X = input.X[:cap(input.X)]
-
 	// Create the weight data matrix
 	set := tf32.NewSet()
-	set.Add("points", width, length)
-	point := set.ByName["points"]
-	point.X = point.X[:cap(point.X)]
-	point.States = make([][]float32, StateTotal)
-	for i := range point.States {
-		point.States[i] = make([]float32, len(point.X))
+	set.Add("points", 2*width, 256)
+	set.Add("symbols", width, 256*256)
+	set.Add("positions", width, length)
+	for _, w := range set.Weights {
+		factor := math.Sqrt(2.0 / float64(w.S[0]))
+		for i := 0; i < cap(w.X); i++ {
+			w.X = append(w.X, float32(rnd.NormFloat64()*factor))
+		}
+		w.States = make([][]float32, StateTotal)
+		for i := range w.States {
+			w.States[i] = make([]float32, len(w.X))
+		}
+	}
+
+	begin0, end0 := 0, 0
+	options0 := map[string]interface{}{
+		"begin": &begin0,
+		"end":   &end0,
+	}
+	begin1, end1 := 0, 0
+	options1 := map[string]interface{}{
+		"begin": &begin1,
+		"end":   &end1,
 	}
 
 	// The neural network is the attention model from attention is all you need
 	softmax := tf32.U(Softmax)
-	l1 := softmax(tf32.Mul(set.Get("points"), others.Get("input")))
+	l1 := softmax(tf32.Mul(set.Get("points"), tf32.Concat(tf32.Slice(set.Get("symbols"), options0), tf32.Slice(set.Get("positions"), options1))))
 	l2 := softmax(tf32.Mul(tf32.T(set.Get("points")), l1))
 	cost := tf32.Entropy(l2)
 
 	points := make(plotter.XYs, 0, 8)
 
-	// Set point weights to the iris data
-	for i, value := range fisher {
-		for j, measure := range value.Measures {
-			point.X[4*i+j] = float32(measure)
-		}
-	}
-
 	// The stochastic gradient descent loop
-	for i < 8*1024 {
+	for i < 16*1024 {
 		// Randomly select a load the input
 		index := rnd.Intn(length)
-		sample := fisher[index]
-		for i, measure := range sample.Measures {
-			input.X[i] = float32(measure)
+		line := english[index]
+		position := rnd.Intn(len(line))
+		prefix := 0
+		if position > 0 {
+			prefix = int(line[position-1])
 		}
+		begin0 = prefix*256*width + int(line[position])*256
+		end0 = begin0 + width
+		begin1 = int(line[position]) * width
+		end1 = begin1 + width
 
 		start := time.Now()
 		// Calculate the gradients
@@ -169,7 +175,6 @@ func main() {
 		end := time.Since(start)
 		fmt.Println(i, total, end)
 		set.Zero()
-		others.Zero()
 
 		if math.IsNaN(float64(total)) {
 			fmt.Println(total)

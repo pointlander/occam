@@ -42,7 +42,7 @@ const (
 )
 
 // Softmax is the softmax function for big numbers
-func Softmax(k tf32.Continuation, node int, a *tf32.V) bool {
+func Softmax(k tf32.Continuation, node int, a *tf32.V, options ...map[string]interface{}) bool {
 	c, size, width := tf32.NewV(a.S...), len(a.X), a.S[0]
 	max := float32(0)
 	for _, v := range a.X {

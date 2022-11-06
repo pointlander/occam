@@ -3,15 +3,15 @@ module github.com/pointlander/occam
 go 1.18
 
 require (
+	github.com/go-echarts/go-echarts/v2 v2.2.4
 	github.com/pointlander/datum/iris v0.0.0-20200802052503-0ee610caba95
-	github.com/pointlander/gradient v0.0.0-20221030024409-e9aacd6a8e71
+	github.com/pointlander/gradient v0.0.0-20221106032557-7cb8015ea370
 	gonum.org/v1/plot v0.12.0
 )
 
 require (
 	git.sr.ht/~sbinet/gg v0.3.1 // indirect
 	github.com/ajstarks/svgo v0.0.0-20211024235047-1546f124cd8b // indirect
-	github.com/go-echarts/go-echarts/v2 v2.2.4 // indirect
 	github.com/go-fonts/liberation v0.2.0 // indirect
 	github.com/go-latex/latex v0.0.0-20210823091927-c0d11ff05a81 // indirect
 	github.com/go-pdf/fpdf v0.6.0 // indirect
