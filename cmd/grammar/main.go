@@ -6,8 +6,10 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"math"
 	"math/rand"
+	"strings"
 	"time"
 
 	"github.com/pointlander/gradient/tf32"
@@ -72,6 +74,19 @@ func Softmax(k tf32.Continuation, node int, a *tf32.V) bool {
 
 func main() {
 	rnd := rand.New(rand.NewSource(1))
+
+	data, err := ioutil.ReadFile("europarl-v7.de-en.en")
+	if err != nil {
+		panic(err)
+	}
+	en := strings.Split(string(data), "\n")
+	english := make([][]byte, 0, len(en))
+	for _, value := range en {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			english = append(english, []byte(value))
+		}
+	}
 
 	// Load the iris data set
 	datum, err := iris.Load()
