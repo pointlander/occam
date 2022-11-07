@@ -110,6 +110,18 @@ func main() {
 				}
 				values = append(values, float32(n))
 			}
+			max := float32(0)
+			for _, v := range values {
+				if v < 0 {
+					v = -v
+				}
+				if v > max {
+					max = v
+				}
+			}
+			for i, v := range values {
+				values[i] = v / max
+			}
 			vectors[strings.ToLower(strings.TrimSpace(parts[0]))] = values
 		}
 		file.Close()
@@ -120,15 +132,18 @@ func main() {
 		panic(err)
 	}
 	en := strings.Split(string(data), "\n")
-	english, length := make([][]byte, 0, len(en)), 0
+	english, length := make([][]string, 0, len(en)), 0
 	for _, value := range en {
 		value = strings.TrimSpace(value)
 		if value != "" {
-			line := []byte(value)
-			if len(line) > length {
-				length = len(line)
+			parts := strings.Split(value, " ")
+			for i, value := range parts {
+				parts[i] = strings.ToLower(value)
 			}
-			english = append(english, line)
+			if len(parts) > length {
+				length = len(parts)
+			}
+			english = append(english, parts)
 		}
 	}
 
@@ -143,15 +158,19 @@ func main() {
 		return float32(y)
 	}
 
+	others := tf32.NewSet()
+	others.Add("symbols", 300, 1)
+	symbols := others.ByName["symbols"]
+	symbols.X = symbols.X[:cap(symbols.X)]
+
 	// Create the weight data matrix
 	set := tf32.NewSet()
-	set.Add("points", 2*width, 256)
-	set.Add("symbols", width, 256*256)
+	set.Add("points", width+300, 1024)
 	set.Add("positions", width, length)
 	for _, w := range set.Weights {
-		factor := math.Sqrt(2.0 / float64(w.S[0]))
+		//factor := math.Sqrt(2.0 / float64(w.S[0]))
 		for i := 0; i < cap(w.X); i++ {
-			w.X = append(w.X, float32(rnd.NormFloat64()*factor))
+			w.X = append(w.X, float32((2*rnd.Float64() - 1) /*factor*/))
 		}
 		w.States = make([][]float32, StateTotal)
 		for i := range w.States {
@@ -159,11 +178,6 @@ func main() {
 		}
 	}
 
-	begin0, end0 := 0, 0
-	options0 := map[string]interface{}{
-		"begin": &begin0,
-		"end":   &end0,
-	}
 	begin1, end1 := 0, 0
 	options1 := map[string]interface{}{
 		"begin": &begin1,
@@ -172,34 +186,56 @@ func main() {
 
 	// The neural network is the attention model from attention is all you need
 	softmax := tf32.U(Softmax)
-	l1 := softmax(tf32.Mul(set.Get("points"), tf32.Concat(tf32.Slice(set.Get("symbols"), options0), tf32.Slice(set.Get("positions"), options1))))
+	l1 := softmax(tf32.Mul(set.Get("points"), tf32.Concat(others.Get("symbols"), tf32.Slice(set.Get("positions"), options1))))
 	l2 := softmax(tf32.Mul(tf32.T(set.Get("points")), l1))
 	cost := tf32.Entropy(l2)
 
 	points := make(plotter.XYs, 0, 8)
+	min := float32(math.MaxFloat32)
 
 	// The stochastic gradient descent loop
-	for i < 16*1024 {
-		// Randomly select a load the input
-		index := rnd.Intn(length)
-		line := english[index]
-		position := rnd.Intn(len(line))
-		prefix := 0
-		if position > 0 {
-			prefix = int(line[position-1])
+	for i < 64*1024 {
+		// Randomly select and load the input
+		for {
+			index := rnd.Intn(length)
+			line := english[index]
+			position := rnd.Intn(len(line))
+			begin1 = position * width
+			end1 = begin1 + width
+			if vector, ok := vectors[line[position]]; ok {
+				for i := range symbols.X {
+					symbols.X[i] = vector[i]
+				}
+				break
+			}
 		}
-		begin0 = prefix*256*width + int(line[position])*256
-		end0 = begin0 + width
-		begin1 = int(line[position]) * width
-		end1 = begin1 + width
 
 		start := time.Now()
 		// Calculate the gradients
 		total := tf32.Gradient(cost).X[0]
+		if total < min {
+			min = total
+		}
 
 		// Update the point weights with the partial derivatives using adam
 		b1, b2 := pow(B1), pow(B2)
 		for j, w := range set.Weights {
+			if w.N == "positions" {
+				for k, d := range w.D {
+					if k < begin1 || k >= end1 {
+						continue
+					}
+					g := d
+					m := B1*w.States[StateM][k] + (1-B1)*g
+					v := B2*w.States[StateV][k] + (1-B2)*g*g
+					w.States[StateM][k] = m
+					w.States[StateV][k] = v
+					mhat := m / (1 - b1)
+					vhat := v / (1 - b2)
+					set.Weights[j].X[k] -= Eta * mhat / (float32(math.Sqrt(float64(vhat))) + 1e-8)
+				}
+				continue
+			}
 			for k, d := range w.D {
 				g := d
 				m := B1*w.States[StateM][k] + (1-B1)*g
@@ -216,6 +252,7 @@ func main() {
 		end := time.Since(start)
 		fmt.Println(i, total, end)
 		set.Zero()
+		others.Zero()
 
 		if math.IsNaN(float64(total)) {
 			fmt.Println(total)
@@ -247,4 +284,6 @@ func main() {
 	}
 
 	set.Save("set.w", 0, 0)
+
+	fmt.Println("min", min)
 }
