@@ -5,10 +5,14 @@
 package main
 
 import (
+	"archive/zip"
+	"bufio"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"math"
 	"math/rand"
+	"strconv"
 	"strings"
 	"time"
 
@@ -73,6 +77,43 @@ func Softmax(k tf32.Continuation, node int, a *tf32.V, options ...map[string]int
 
 func main() {
 	rnd := rand.New(rand.NewSource(1))
+
+	vectors := make(map[string][]float32)
+	reader, err := zip.OpenReader("wiki-news-300d-1M.vec.zip")
+	if err != nil {
+		panic(err)
+	}
+	defer reader.Close()
+
+	for _, file := range reader.File {
+		fmt.Printf("Contents of %s:\n", file.Name)
+		file, err := file.Open()
+		if err != nil {
+			panic(err)
+		}
+		reader := bufio.NewReader(file)
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+
+				return
+			}
+			parts := strings.Split(line, " ")
+			values := make([]float32, 0, len(parts)-1)
+			for _, v := range parts[1:] {
+				n, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
+				if err != nil {
+					panic(err)
+				}
+				values = append(values, float32(n))
+			}
+			vectors[strings.ToLower(strings.TrimSpace(parts[0]))] = values
+		}
+		file.Close()
+	}
 
 	data, err := ioutil.ReadFile("europarl-v7.de-en.en")
 	if err != nil {
