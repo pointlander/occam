@@ -7,11 +7,13 @@ package main
 import (
 	"bufio"
 	"compress/gzip"
+	"flag"
 	"fmt"
 	"io"
 	"math"
 	"math/rand"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -145,12 +147,86 @@ func Softmax(k tf32.Continuation, node int, a *tf32.V, options ...map[string]int
 	return false
 }
 
+var (
+	//FlagInfer inference mode
+	FlagInfer = flag.String("infer", "", "inference mode")
+)
+
 func main() {
+	flag.Parse()
 	rnd := rand.New(rand.NewSource(1))
 
 	env := NewVectors("cc.en.300.vec.gz")
 	dev := NewVectors("cc.de.300.vec.gz")
 
+	width := 300
+
+	if *FlagInfer != "" {
+		others := tf32.NewSet()
+		others.Add("symbols", width, 1)
+		symbols := others.ByName["symbols"]
+		symbols.X = symbols.X[:cap(symbols.X)]
+
+		// Create the weight data matrix
+		set := tf32.NewSet()
+		set.Open(*FlagInfer)
+
+		softmax := tf32.U(Softmax)
+		l1 := softmax(tf32.Mul(set.Get("points"), others.Get("symbols")))
+
+		type Point struct {
+			Index int
+			Rank  float32
+		}
+		type Input struct {
+			Points []Point
+			Label  string
+		}
+
+		cluster := func(word string, vectors Vectors) Input {
+			vector := vectors.Dictionary[word]
+			for i, measure := range vector.Vector {
+				symbols.X[i] = float32(measure)
+			}
+			// Calculate the l1 output of the neural network
+			var input Input
+			l1(func(a *tf32.V) bool {
+				points := make([]Point, 0, width)
+				for j, value := range a.X {
+					points = append(points, Point{
+						Index: j,
+						Rank:  value,
+					})
+				}
+				sort.Slice(points, func(i, j int) bool {
+					return points[i].Rank > points[j].Rank
+				})
+				input = Input{
+					Points: points,
+					Label:  word,
+				}
+				return true
+			})
+			return input
+		}
+		a := cluster("dog", env)
+		b := cluster("hund", dev)
+		for _, value := range a.Points {
+			if value.Rank == 0 {
+				continue
+			}
+			fmt.Printf("%d %f ", value.Index, value.Rank)
+		}
+		fmt.Printf("\n")
+		for _, value := range b.Points {
+			if value.Rank == 0 {
+				continue
+			}
+			fmt.Printf("%d %f ", value.Index, value.Rank)
+		}
+		fmt.Printf("\n")
+		return
+	}
 	/*data, err := ioutil.ReadFile("europarl-v7.de-en.en")
 	if err != nil {
 		panic(err)
@@ -170,8 +246,6 @@ func main() {
 			english = append(english, parts)
 		}
 	}*/
-
-	width := 300
 
 	i := 1
 	pow := func(x float32) float32 {
