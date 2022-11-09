@@ -230,12 +230,26 @@ func main() {
 		}
 		fmt.Printf("\n")
 
+		l1 = tf32.Mul(set.Get("points"), others.Get("symbols"))
+
 		g, y := image.NewGray16(image.Rect(0, 0, 1024, 1024)), 0
 		for i := 0; i < width*1024; i += width {
 			copy(symbols.X, points.X[i:i+width])
+			max, min := float32(0), float32(math.MaxFloat32)
+			l1(func(a *tf32.V) bool {
+				for _, value := range a.X {
+					if value > max {
+						max = value
+					}
+					if value < min {
+						min = value
+					}
+				}
+				return true
+			})
 			l1(func(a *tf32.V) bool {
 				for i, value := range a.X {
-					g.SetGray16(i, y, color.Gray16{uint16(65535 * value)})
+					g.SetGray16(i, y, color.Gray16{uint16(65535 * (value - min) / (max - min))})
 				}
 				return true
 			})
