@@ -9,6 +9,9 @@ import (
 	"compress/gzip"
 	"flag"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"io"
 	"math"
 	"math/rand"
@@ -157,7 +160,7 @@ func main() {
 	rnd := rand.New(rand.NewSource(1))
 
 	env := NewVectors("cc.en.300.vec.gz")
-	dev := NewVectors("cc.de.300.vec.gz")
+	//dev := NewVectors("cc.de.300.vec.gz")
 
 	width := 300
 
@@ -170,6 +173,7 @@ func main() {
 		// Create the weight data matrix
 		set := tf32.NewSet()
 		set.Open(*FlagInfer)
+		points := set.ByName["points"]
 
 		softmax := tf32.U(Softmax)
 		l1 := softmax(tf32.Mul(set.Get("points"), others.Get("symbols")))
@@ -209,8 +213,8 @@ func main() {
 			})
 			return input
 		}
-		a := cluster("dog", env)
-		b := cluster("hund", dev)
+		a := cluster("car", env)
+		b := cluster("truck", env)
 		for _, value := range a.Points {
 			if value.Rank == 0 {
 				continue
@@ -225,6 +229,28 @@ func main() {
 			fmt.Printf("%d %f ", value.Index, value.Rank)
 		}
 		fmt.Printf("\n")
+
+		g, y := image.NewGray16(image.Rect(0, 0, 1024, 1024)), 0
+		for i := 0; i < width*1024; i += width {
+			copy(symbols.X, points.X[i:i+width])
+			l1(func(a *tf32.V) bool {
+				for i, value := range a.X {
+					g.SetGray16(i, y, color.Gray16{uint16(65535 * value)})
+				}
+				return true
+			})
+			y++
+		}
+
+		f, err := os.Create("output.png")
+		if err != nil {
+			panic(err)
+		}
+		defer f.Close()
+		err = png.Encode(f, g)
+		if err != nil {
+			panic(err)
+		}
 		return
 	}
 	/*data, err := ioutil.ReadFile("europarl-v7.de-en.en")
@@ -284,12 +310,20 @@ func main() {
 	min := float32(math.MaxFloat32)
 
 	// The stochastic gradient descent loop
-	for i < 64*1024 {
+	for i < 256*1024 {
 		// Randomly select and load the input
-		vectors := env
-		if rnd.Intn(2) == 0 {
+		var vectors Vectors
+		vectors = env
+		/*if i < 128*1024 {
+			vectors = env
+		} else if i < 256*1024 {
 			vectors = dev
-		}
+		} else {
+			vectors = env
+			if rnd.Intn(2) == 0 {
+				vectors = dev
+			}
+		}*/
 		vector := vectors.List[rnd.Intn(len(vectors.List))]
 		for i := range symbols.X {
 			symbols.X[i] = vector.Vector[i]
