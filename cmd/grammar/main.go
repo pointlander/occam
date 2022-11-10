@@ -242,6 +242,26 @@ func main() {
 		}
 		fmt.Printf("\n")
 
+		for part, words := range PartsOfSpeech {
+			common := make(map[int]int)
+			for _, word := range words {
+				fmt.Printf("%12s ", part)
+				value := cluster(word, env)
+				for _, point := range value.Points[:20] {
+					common[point.Index]++
+					fmt.Printf("%4d ", point.Index)
+				}
+				fmt.Printf("\n")
+			}
+			maxIndex, max := 0, 0
+			for index, count := range common {
+				if count > max {
+					max, maxIndex = count, index
+				}
+			}
+			fmt.Println(maxIndex)
+		}
+
 		l1 = tf32.Mul(set.Get("points"), others.Get("symbols"))
 
 		g, y := image.NewGray16(image.Rect(0, 0, 1024, 1024)), 0
