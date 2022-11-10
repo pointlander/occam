@@ -49,6 +49,18 @@ const (
 	StateTotal
 )
 
+// PartOfSpeech is a part of speech with examples
+var PartsOfSpeech = map[string][10]string{
+	"noun":         {"city", "new york", "banana", "bananas", "family", "ice cream", "table", "anger"},
+	"pronoun":      {"i", "he", "him", "you", "we", "him", "her", "yours", "theirs", "someone"},
+	"verb":         {"swim", "realize", "run", "walk", "laugh", "have", "promise", "invite", "listen", "running"},
+	"adjective":    {"adventurous", "beautiful", "calm", "dark", "drab", "easy", "foolish", "grieving", "helpful", "important"},
+	"adverb":       {"quickly", "happily", "easily", "slowly", "angrily", "honestly", "carefully", "quietly", "suddenly", "safely"},
+	"preposition":  {"in", "on", "at", "near", "for", "with", "about", "between", "under", "behind"},
+	"conjunction":  {"and", "or", "but", "because", "so", "yet", "although", "since", "unless", "if"},
+	"interjection": {"ouch", "wow", "oh", "ah", "oops", "yikes", "yay", "yuck", "yippee", "yup"},
+}
+
 // Vector is a word vector
 type Vector struct {
 	Word   string
