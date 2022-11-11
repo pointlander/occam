@@ -18,6 +18,7 @@ import (
 	"github.com/go-echarts/go-echarts/v2/opts"
 	"github.com/pointlander/datum/iris"
 	"github.com/pointlander/gradient/tf32"
+	"github.com/pointlander/levenshtein"
 	"gonum.org/v1/plot/plotter"
 )
 
@@ -319,20 +320,19 @@ func (n *Network) Analyzer(fisher []iris.Iris) {
 	// Count how many inputs have the same label as their nearest neighbor
 	same := 0
 	for i, label := range inputs {
-		max, index := 0, 0
+		min, index := math.MaxInt, 0
 		for j, l := range inputs {
 			if i == j {
 				continue
 			}
-			total := 0
+			a, b := make([]int, 0, 8), make([]int, 0, 8)
 			for k, value := range label.Points {
-				a, b := value.Index, l.Points[k].Index
-				if a == b {
-					total++
-				}
+				a = append(a, value.Index)
+				b = append(b, l.Points[k].Index)
 			}
-			if total > max {
-				max, index = total, j
+			total := levenshtein.ComputeDistance(a, b)
+			if total < min {
+				min, index = total, j
 			}
 		}
 		for _, rank := range label.Points[:18] {
