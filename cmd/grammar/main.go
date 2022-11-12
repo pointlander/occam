@@ -165,6 +165,8 @@ func Softmax(k tf32.Continuation, node int, a *tf32.V, options ...map[string]int
 var (
 	//FlagInfer inference mode
 	FlagInfer = flag.String("infer", "", "inference mode")
+	//FlagTrain train mode
+	FlagTrain = flag.String("train", "en", "train mode")
 )
 
 func main() {
@@ -172,7 +174,7 @@ func main() {
 	rnd := rand.New(rand.NewSource(1))
 
 	env := NewVectors("cc.en.300.vec.gz")
-	//dev := NewVectors("cc.de.300.vec.gz")
+	dev := NewVectors("cc.de.300.vec.gz")
 
 	width := 300
 
@@ -358,8 +360,10 @@ func main() {
 	// The stochastic gradient descent loop
 	for i < 256*1024 {
 		// Randomly select and load the input
-		var vectors Vectors
-		vectors = env
+		vectors := env
+		if *FlagTrain == "de" {
+			vectors = dev
+		}
 		/*if i < 128*1024 {
 			vectors = env
 		} else if i < 256*1024 {
@@ -432,7 +436,7 @@ func main() {
 		panic(err)
 	}
 
-	set.Save("set.w", 0, 0)
+	set.Save(fmt.Sprintf("%s_set.w", *FlagTrain), 0, 0)
 
 	fmt.Println("min", min)
 }
