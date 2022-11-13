@@ -169,8 +169,32 @@ func (n *Network) Iterate(data []float64) float32 {
 	return total
 }
 
+func (n *Network) GetVectors(inputs []iris.Iris) []iris.Iris {
+	outputs := make([]iris.Iris, 0, len(inputs))
+	for i := 0; i < n.Length; i++ {
+		// Load the input
+		sample := inputs[i]
+		for i, measure := range sample.Measures {
+			n.Input.X[i] = float32(measure)
+		}
+		// Calculate the l1 output of the neural network
+		n.L1(func(a *tf32.V) bool {
+			vectors := make([]float64, len(a.X))
+			for i, x := range a.X {
+				vectors[i] = float64(x)
+			}
+			outputs = append(outputs, iris.Iris{
+				Measures: vectors,
+				Label:    sample.Label,
+			})
+			return true
+		})
+	}
+	return outputs
+}
+
 // Analyzer calculates properties of the network
-func (n *Network) Analyzer(fisher []iris.Iris) {
+func (n *Network) Analyzer(in []iris.Iris) {
 	// For each input, label and sort the points in terms of distance to the input
 	type Point struct {
 		Index int
@@ -206,29 +230,22 @@ func (n *Network) Analyzer(fisher []iris.Iris) {
 		build(input, depth+1, n)
 	}
 	inputs := make([]Input, 0, n.Length)
+	vectors := n.GetVectors(in)
 	for i := 0; i < n.Length; i++ {
-		// Load the input
-		sample := fisher[i]
-		for i, measure := range sample.Measures {
-			n.Input.X[i] = float32(measure)
+		vector := vectors[i]
+		points := make([]Point, 0, n.Length)
+		for j, value := range vector.Measures {
+			points = append(points, Point{
+				Index: j,
+				Rank:  float32(value),
+			})
 		}
-		// Calculate the l1 output of the neural network
-		n.L1(func(a *tf32.V) bool {
-			points := make([]Point, 0, n.Length)
-			for j, value := range a.X {
-				points = append(points, Point{
-					Index: j,
-					Rank:  value,
-				})
-			}
-			sort.Slice(points, func(i, j int) bool {
-				return points[i].Rank > points[j].Rank
-			})
-			inputs = append(inputs, Input{
-				Points: points,
-				Label:  fisher[i].Label,
-			})
-			return true
+		sort.Slice(points, func(i, j int) bool {
+			return points[i].Rank > points[j].Rank
+		})
+		inputs = append(inputs, Input{
+			Points: points,
+			Label:  vector.Label,
 		})
 	}
 	// Sort the inputs by the point indexes
