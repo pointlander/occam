@@ -361,4 +361,29 @@ func (n *Network) Analyzer(in []iris.Iris) {
 		}
 	}
 	fmt.Println(same, n.Length, float64(same)/float64(n.Length))
+
+	same = 0
+	var count func(node *Node)
+	count = func(node *Node) {
+		if node == nil {
+			return
+		}
+		label := ""
+		s := true
+		for _, n := range node.Nodes {
+			if len(n.Nodes) == 0 {
+				if label == "" {
+					label = n.Label[0]
+				} else if label != n.Label[0] {
+					s = false
+				}
+			}
+			count(n)
+		}
+		if s && label != "" {
+			same++
+		}
+	}
+	count(node)
+	fmt.Println(same, n.Length, float64(same)/float64(n.Length))
 }
