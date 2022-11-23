@@ -72,6 +72,8 @@ github.com/pointlander/gradient v0.0.0-20221106032557-7cb8015ea370 h1:SSFV2lO5g2
 github.com/pointlander/gradient v0.0.0-20221106032557-7cb8015ea370/go.mod h1:gVxcVB9oJ9tPTLxBB4mLnZ7gQ3tRdkLxr0v7WPkahJ8=
 github.com/pointlander/levenshtein v0.0.0-20221110035309-463d326762ab h1:PLDHveCymJ6Rez3Pm9q4JnDp3cBJCopnbV7aScapO0A=
 github.com/pointlander/levenshtein v0.0.0-20221110035309-463d326762ab/go.mod h1:a5U4ZkrbG12BCWr+HhD+oyPxP6G2BRGN0WS2X3ZxsmY=
+github.com/pointlander/pagerank v0.0.0-20210619221740-830548a59275 h1:KF7JT+ypSI82OfOEGVdNBM31o5+7NuFuuenR3quajVc=
+github.com/pointlander/pagerank v0.0.0-20210619221740-830548a59275/go.mod h1:9UawvzpkRT8gwNLM8E8JdGnn6p1kHqEdV+P8TlDZibk=
 github.com/prometheus/client_model v0.0.0-20190812154241-14fe0d1b01d4/go.mod h1:xMI15A0UPsDsEKsMN9yxemIoYk6Tm2C1GtYGdfGttqA=
 github.com/ruudk/golang-pdf417 v0.0.0-20181029194003-1af4ab5afa58/go.mod h1:6lfFZQK844Gfx8o5WFuvpxWRwnSoipWe/p622j1v06w=
 github.com/ruudk/golang-pdf417 v0.0.0-20201230142125-a7e3863a1245/go.mod h1:pQAZKsJ8yyVxGRWYNEm9oFB8ieLgKFnamEyDmSA0BRk=

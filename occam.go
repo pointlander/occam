@@ -19,6 +19,7 @@ import (
 	"github.com/pointlander/datum/iris"
 	"github.com/pointlander/gradient/tf32"
 	"github.com/pointlander/levenshtein"
+	"github.com/pointlander/pagerank"
 	"gonum.org/v1/plot/plotter"
 )
 
@@ -362,28 +363,25 @@ func (n *Network) Analyzer(in []iris.Iris) {
 	}
 	fmt.Println(same, n.Length, float64(same)/float64(n.Length))
 
-	same = 0
-	var count func(node *Node)
-	count = func(node *Node) {
-		if node == nil {
-			return
-		}
-		label := ""
-		s := true
-		for _, n := range node.Nodes {
-			if len(n.Nodes) == 0 {
-				if label == "" {
-					label = n.Label[0]
-				} else if label != n.Label[0] {
-					s = false
-				}
-			}
-			count(n)
-		}
-		if s && label != "" {
-			same++
+	type Point64 struct {
+		Index int
+		Rank  float64
+	}
+	g := pagerank.NewGraph64()
+	for i, vector := range vectors {
+		for j, weight := range vector.Measures {
+			g.Link(uint64(i), uint64(j), weight)
 		}
 	}
-	count(node)
-	fmt.Println(same, n.Length, float64(same)/float64(n.Length))
+	ranks := make([]Point64, n.Length)
+	g.Rank(0.85, 0.000001, func(node uint64, rank float64) {
+		ranks[node].Rank = rank
+		ranks[node].Index = int(node)
+	})
+	sort.Slice(ranks, func(i, j int) bool {
+		return ranks[i].Rank > ranks[j].Rank
+	})
+	for _, rank := range ranks {
+		fmt.Printf("%03d %.16f\n", rank.Index, rank.Rank)
+	}
 }
