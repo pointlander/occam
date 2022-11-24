@@ -7,8 +7,14 @@ package main
 import (
 	"flag"
 	"fmt"
+	"image"
+	"image/color"
+	"image/color/palette"
+	drw "image/draw"
+	"image/gif"
 	"math"
 	"math/rand"
+	"os"
 	"time"
 
 	"github.com/pointlander/gradient/tf32"
@@ -19,6 +25,7 @@ import (
 	"gonum.org/v1/plot/plotter"
 	"gonum.org/v1/plot/vg"
 	"gonum.org/v1/plot/vg/draw"
+	"gonum.org/v1/plot/vg/vgimg"
 )
 
 const (
@@ -105,6 +112,7 @@ func main() {
 			w.States[i] = make([]float32, len(w.X))
 		}
 	}
+	particles := set.ByName["points"].X
 
 	// The neural network is the attention model from attention is all you need
 	softmax := tf32.U(Softmax)
@@ -112,7 +120,32 @@ func main() {
 	l2 := softmax(tf32.Mul(tf32.T(set.Get("points")), l1))
 	cost := tf32.Entropy(l2)
 
+	project := func(x []float32) plotter.XYs {
+		particles64 := make([]float64, 0, len(x))
+		for _, v := range x {
+			particles64 = append(particles64, float64(v))
+		}
+		ranks := mat.NewDense(1024, width, particles64)
+		var pc stat.PC
+		ok := pc.PrincipalComponents(ranks, nil)
+		if !ok {
+			panic("PrincipalComponents failed")
+		}
+		k := 2
+		var proj mat.Dense
+		var vec mat.Dense
+		pc.VectorsTo(&vec)
+		proj.Mul(ranks, vec.Slice(0, width, 0, k))
+
+		points := make(plotter.XYs, 0, 8)
+		for i := 0; i < 1024; i++ {
+			points = append(points, plotter.XY{X: proj.At(i, 0), Y: proj.At(i, 1)})
+		}
+		return points
+	}
+
 	points := make(plotter.XYs, 0, 8)
+	animation := &gif.GIF{}
 	// The stochastic gradient descent loop
 	for i < 4*1024 {
 		start := time.Now()
@@ -146,7 +179,44 @@ func main() {
 
 		points = append(points, plotter.XY{X: float64(i), Y: float64(total)})
 		i++
+
+		p := plot.New()
+
+		p.Title.Text = "x vs y"
+		p.X.Label.Text = "x"
+		p.Y.Label.Text = "y"
+
+		scatter, err := plotter.NewScatter(project(particles))
+		if err != nil {
+			panic(err)
+		}
+		scatter.GlyphStyle.Radius = vg.Length(3)
+		scatter.GlyphStyle.Shape = draw.CircleGlyph{}
+		p.Add(scatter)
+
+		c := vgimg.New(8*vg.Inch, 8*vg.Inch)
+		p.Draw(draw.New(c))
+
+		opts := gif.Options{
+			NumColors: 256,
+			Drawer:    drw.FloydSteinberg,
+		}
+		bounds := c.Image().Bounds()
+
+		// More or less taken from the image/gif package
+		paletted := image.NewPaletted(bounds, palette.Plan9[:opts.NumColors])
+		if opts.Quantizer != nil {
+			paletted.Palette = opts.Quantizer.Quantize(make(color.Palette, 0, opts.NumColors), c.Image())
+		}
+		opts.Drawer.Draw(paletted, bounds, c.Image(), image.ZP)
+
+		animation.Image = append(animation.Image, paletted)
+		animation.Delay = append(animation.Delay, 0)
 	}
+
+	f, _ := os.OpenFile("animation.gif", os.O_WRONLY|os.O_CREATE, 0600)
+	defer f.Close()
+	gif.EncodeAll(f, animation)
 
 	// Plot the cost
 	p := plot.New()
@@ -168,35 +238,11 @@ func main() {
 		panic(err)
 	}
 
-	particles := set.ByName["points"].X
 	for i := 0; i < 1024; i++ {
 		for j := 0; j < width; j++ {
 			fmt.Printf("%f ", particles[i*width+j])
 		}
 		fmt.Println()
-	}
-
-	particles64 := make([]float64, 0, len(particles))
-	for _, v := range particles {
-		particles64 = append(particles64, float64(v))
-	}
-	ranks := mat.NewDense(1024, width, particles64)
-	var pc stat.PC
-	ok := pc.PrincipalComponents(ranks, nil)
-	if !ok {
-		panic("PrincipalComponents failed")
-	}
-	k := 2
-	var proj mat.Dense
-	var vec mat.Dense
-	pc.VectorsTo(&vec)
-	proj.Mul(ranks, vec.Slice(0, width, 0, k))
-
-	fmt.Printf("\n")
-	points = make(plotter.XYs, 0, 8)
-	for i := 0; i < 1024; i++ {
-		fmt.Println(proj.At(i, 0), proj.At(i, 1))
-		points = append(points, plotter.XY{X: proj.At(i, 0), Y: proj.At(i, 1)})
 	}
 
 	p = plot.New()
@@ -205,7 +251,7 @@ func main() {
 	p.X.Label.Text = "x"
 	p.Y.Label.Text = "y"
 
-	scatter, err = plotter.NewScatter(points)
+	scatter, err = plotter.NewScatter(project(particles))
 	if err != nil {
 		panic(err)
 	}
