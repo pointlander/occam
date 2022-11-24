@@ -118,7 +118,7 @@ func main() {
 	softmax := tf32.U(Softmax)
 	l1 := softmax(tf32.Mul(set.Get("points"), set.Get("points")))
 	l2 := softmax(tf32.Mul(tf32.T(set.Get("points")), l1))
-	cost := tf32.Entropy(l2)
+	cost := tf32.Sum(tf32.Entropy(l2))
 
 	project := func(x []float32) plotter.XYs {
 		particles64 := make([]float64, 0, len(x))
