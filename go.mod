@@ -6,6 +6,9 @@ require (
 	github.com/go-echarts/go-echarts/v2 v2.2.4
 	github.com/pointlander/datum/iris v0.0.0-20200802052503-0ee610caba95
 	github.com/pointlander/gradient v0.0.0-20221106032557-7cb8015ea370
+	github.com/pointlander/levenshtein v0.0.0-20221110035309-463d326762ab
+	github.com/pointlander/pagerank v0.0.0-20210619221740-830548a59275
+	gonum.org/v1/gonum v0.12.0
 	gonum.org/v1/plot v0.12.0
 )
 
@@ -17,8 +20,6 @@ require (
 	github.com/go-pdf/fpdf v0.6.0 // indirect
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
 	github.com/golang/protobuf v1.4.2 // indirect
-	github.com/pointlander/levenshtein v0.0.0-20221110035309-463d326762ab // indirect
-	github.com/pointlander/pagerank v0.0.0-20210619221740-830548a59275 // indirect
 	github.com/ziutek/blas v0.0.0-20190227122918-da4ca23e90bb // indirect
 	golang.org/x/image v0.0.0-20220902085622-e7cb96979f69 // indirect
 	golang.org/x/text v0.3.7 // indirect
