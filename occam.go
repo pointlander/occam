@@ -74,6 +74,38 @@ func Softmax(k tf32.Continuation, node int, a *tf32.V, options ...map[string]int
 	return false
 }
 
+// SphericalSoftmax is the spherical softmax function
+// https://arxiv.org/abs/1511.05042
+func SphericalSoftmax(k tf32.Continuation, node int, a *tf32.V, options ...map[string]interface{}) bool {
+	c, size, width := tf32.NewV(a.S...), len(a.X), a.S[0]
+	values := make([]float32, width)
+	for i := 0; i < size; i += width {
+		sum := float32(0.0)
+		for j, ax := range a.X[i : i+width] {
+			values[j] = ax*ax + .001
+			sum += values[j]
+		}
+		for _, cx := range values {
+			c.X = append(c.X, cx/sum)
+		}
+	}
+	if k(&c) {
+		return true
+	}
+	// (o^2 + e) * (o^2 + e)^-1
+	// o^2 * sum(o^2 + e)^-1 + e * sum(o^2 + e)^-1
+	// 2*o * sum(o^2 + e)^-1 - o^2 * 2*o * sum(o^2 + e)^-2 - 2*o * sum(o^2 + e)^-2
+	// 2*o * sum(o^2 + e)^-1 - 2*o * sum(o^2 + e)^-2 * (o^2 + 1)
+	// 2*o (sum(o^2 + e)^-1 - sum(o^2 + e)^-2 * (o^2 + 1))
+	// 2*o / sum(o^2 + e) * (sum!(o^2 + e) / sum(o^2 + e))
+	// 2*o * sum!(o^2 + e) / sum(o^2 + e)^2
+	for i, d := range c.D {
+		cx := c.X[i]
+		a.D[i] += d * (cx - cx*cx)
+	}
+	return false
+}
+
 // Network is a clustering neural network
 type Network struct {
 	Rnd    *rand.Rand
