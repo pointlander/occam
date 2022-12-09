@@ -92,13 +92,7 @@ func SphericalSoftmax(k tf32.Continuation, node int, a *tf32.V, options ...map[s
 	if k(&c) {
 		return true
 	}
-	// (o^2 + e) * (o^2 + e)^-1
-	// o^2 * sum(o^2 + e)^-1 + e * sum(o^2 + e)^-1
-	// 2*o * sum(o^2 + e)^-1 - o^2 * 2*o * sum(o^2 + e)^-2 - 2*o * sum(o^2 + e)^-2
-	// 2*o * sum(o^2 + e)^-1 - 2*o * sum(o^2 + e)^-2 * (o^2 + 1)
-	// 2*o (sum(o^2 + e)^-1 - sum(o^2 + e)^-2 * (o^2 + 1))
-	// 2*o / sum(o^2 + e) * (sum!(o^2 + e) / sum(o^2 + e))
-	// 2*o * sum!(o^2 + e) / sum(o^2 + e)^2
+	// (2 a (b^2 + c^2 + d^2 + 0.003))/(a^2 + b^2 + c^2 + d^2 + 0.004)^2
 	for i, d := range c.D {
 		cx := c.X[i]
 		a.D[i] += d * (cx - cx*cx)
