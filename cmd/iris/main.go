@@ -5,6 +5,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"math"
 	"sort"
@@ -18,7 +19,14 @@ import (
 	"gonum.org/v1/plot/vg/draw"
 )
 
+var (
+	// FlagNormalize is the flag to normalize the data
+	FlagNormalize = flag.Bool("normalize", false, "normalize the data")
+)
+
 func main() {
+	flag.Parse()
+
 	// Load the iris data set
 	datum, err := iris.Load()
 	if err != nil {
@@ -26,14 +34,16 @@ func main() {
 	}
 	fisher := datum.Fisher
 	length := len(fisher)
-	for _, value := range fisher {
-		sum := 0.0
-		for _, measure := range value.Measures {
-			sum += measure * measure
-		}
-		sum = math.Sqrt(sum)
-		for i := range value.Measures {
-			value.Measures[i] /= sum
+	if *FlagNormalize {
+		for _, value := range fisher {
+			sum := 0.0
+			for _, measure := range value.Measures {
+				sum += measure * measure
+			}
+			sum = math.Sqrt(sum)
+			for i := range value.Measures {
+				value.Measures[i] /= sum
+			}
 		}
 	}
 
@@ -55,7 +65,11 @@ func main() {
 	}
 
 	// The stochastic gradient descent loop
-	for n.I < 8*1024 {
+	epochs := 8 * 1024
+	if *FlagNormalize {
+		epochs = 1024
+	}
+	for n.I < epochs {
 		// Randomly select a load the input
 		index := n.Rnd.Intn(length)
 		sample := fisher[index]
