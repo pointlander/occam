@@ -7,6 +7,7 @@ package main
 import (
 	"fmt"
 	"math"
+	"sort"
 
 	"github.com/pointlander/occam"
 
@@ -33,6 +34,14 @@ func main() {
 		for j, measure := range value.Measures {
 			n.Point.X[4*i+j] = float32(measure)
 		}
+	}
+
+	entropy := n.GetEntropy(fisher)
+	sort.Slice(entropy, func(i, j int) bool {
+		return entropy[i].Entropy > entropy[j].Entropy
+	})
+	for _, e := range entropy {
+		fmt.Printf("%.7f %s\n", e.Entropy, e.Label)
 	}
 
 	// The stochastic gradient descent loop

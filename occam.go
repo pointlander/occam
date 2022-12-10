@@ -166,6 +166,33 @@ func NewNetwork(width, length int) *Network {
 	return &n
 }
 
+// Entropy is the self entropy of a point
+type Entropy struct {
+	Entropy float32
+	Label   string
+}
+
+// GetEntropy returns the entropy of the network
+func (n *Network) GetEntropy(inputs []iris.Iris) []Entropy {
+	outputs := make([]Entropy, 0, len(inputs))
+	for i := 0; i < n.Length; i++ {
+		// Load the input
+		sample := inputs[i]
+		for i, measure := range sample.Measures {
+			n.Input.X[i] = float32(measure)
+		}
+		// Calculate the l1 output of the neural network
+		n.Cost(func(a *tf32.V) bool {
+			outputs = append(outputs, Entropy{
+				Entropy: a.X[0],
+				Label:   sample.Label,
+			})
+			return true
+		})
+	}
+	return outputs
+}
+
 // Iterate does a gradient descent operation
 func (n *Network) Iterate(data []float64) float32 {
 	for i, measure := range data {
