@@ -157,6 +157,7 @@ func NewNetwork(width, length int) *Network {
 	softmax := tf32.U(Softmax)
 	_ = softmax
 	spherical := tf32.U(SphericalSoftmax)
+	_ = spherical
 	n.L1 = spherical(tf32.Mul(n.Set.Get("points"), n.Others.Get("input")))
 	n.L2 = spherical(tf32.T(tf32.Mul(n.L1, tf32.T(n.Set.Get("points")))))
 	n.Cost = tf32.Entropy(n.L2)

@@ -26,6 +26,16 @@ func main() {
 	}
 	fisher := datum.Fisher
 	length := len(fisher)
+	for _, value := range fisher {
+		sum := 0.0
+		for _, measure := range value.Measures {
+			sum += measure * measure
+		}
+		sum = math.Sqrt(sum)
+		for i := range value.Measures {
+			value.Measures[i] /= sum
+		}
+	}
 
 	n := occam.NewNetwork(4, length)
 
