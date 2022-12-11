@@ -60,9 +60,82 @@ func main() {
 	sort.Slice(entropy, func(i, j int) bool {
 		return entropy[i].Entropy > entropy[j].Entropy
 	})
-	for _, e := range entropy {
-		fmt.Printf("%.7f %s\n", e.Entropy, e.Label)
+	last := float32(0.0)
+	for i, e := range entropy {
+		fmt.Printf("%3d %.7f %.7f %s\n", i, e.Entropy, last-e.Entropy, e.Label)
+		last = e.Entropy
 	}
+
+	var split func(depth int, entropy []occam.Entropy, splits []int) []int
+	split = func(depth int, entropy []occam.Entropy, splits []int) []int {
+		if depth == 0 {
+			return splits
+		}
+
+		sum := float32(0.0)
+		for _, e := range entropy {
+			sum += e.Entropy
+		}
+		avg, vari := sum/float32(len(entropy)), float32(0.0)
+		for _, e := range entropy {
+			difference := e.Entropy - avg
+			vari += difference * difference
+		}
+		vari /= float32(len(entropy))
+
+		index, max := 0, float32(0.0)
+		for i := 1; i < len(entropy); i++ {
+			suma, counta := float32(0.0), float32(0.0)
+			for _, e := range entropy[:i] {
+				suma += e.Entropy
+				counta++
+			}
+			avga, varia := suma/counta, float32(0.0)
+			for _, e := range entropy[:i] {
+				difference := e.Entropy - avga
+				varia += difference * difference
+			}
+			varia /= counta
+
+			sumb, countb := float32(0.0), float32(0.0)
+			for _, e := range entropy[i:] {
+				sumb += e.Entropy
+				countb++
+			}
+			avgb, varib := sumb/countb, float32(0.0)
+			for _, e := range entropy[i:] {
+				difference := e.Entropy - avgb
+				varib += difference * difference
+			}
+			varib /= countb
+
+			gain := vari - (varia + varib)
+			if gain > max {
+				index, max = i, gain
+			}
+		}
+		splits = append(splits, index)
+
+		dat := make([]iris.Iris, 0, 8)
+		for _, e := range entropy[index:] {
+			dat = append(dat, iris.Iris{
+				Measures: e.Measures,
+				Label:    e.Label,
+			})
+		}
+		splits = split(depth-1, n.GetEntropy(dat), splits)
+
+		dat = make([]iris.Iris, 0, 8)
+		for _, e := range entropy[:index] {
+			dat = append(dat, iris.Iris{
+				Measures: e.Measures,
+				Label:    e.Label,
+			})
+		}
+		return split(depth-1, n.GetEntropy(dat), splits)
+	}
+	splits := split(2, entropy, []int{})
+	fmt.Println(splits)
 
 	// The stochastic gradient descent loop
 	epochs := 8 * 1024

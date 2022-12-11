@@ -158,8 +158,8 @@ func NewNetwork(width, length int) *Network {
 	_ = softmax
 	spherical := tf32.U(SphericalSoftmax)
 	_ = spherical
-	n.L1 = spherical(tf32.Mul(n.Set.Get("points"), n.Others.Get("input")))
-	n.L2 = spherical(tf32.T(tf32.Mul(n.L1, tf32.T(n.Set.Get("points")))))
+	n.L1 = softmax(tf32.Mul(n.Set.Get("points"), n.Others.Get("input")))
+	n.L2 = softmax(tf32.T(tf32.Mul(n.L1, tf32.T(n.Set.Get("points")))))
 	n.Cost = tf32.Entropy(n.L2)
 
 	n.Points = make(plotter.XYs, 0, 8)
@@ -169,14 +169,15 @@ func NewNetwork(width, length int) *Network {
 
 // Entropy is the self entropy of a point
 type Entropy struct {
-	Entropy float32
-	Label   string
+	Entropy  float32
+	Label    string
+	Measures []float64
 }
 
 // GetEntropy returns the entropy of the network
 func (n *Network) GetEntropy(inputs []iris.Iris) []Entropy {
 	outputs := make([]Entropy, 0, len(inputs))
-	for i := 0; i < n.Length; i++ {
+	for i := 0; i < len(inputs); i++ {
 		// Load the input
 		sample := inputs[i]
 		for i, measure := range sample.Measures {
@@ -185,8 +186,9 @@ func (n *Network) GetEntropy(inputs []iris.Iris) []Entropy {
 		// Calculate the l1 output of the neural network
 		n.Cost(func(a *tf32.V) bool {
 			outputs = append(outputs, Entropy{
-				Entropy: a.X[0],
-				Label:   sample.Label,
+				Entropy:  a.X[0],
+				Label:    sample.Label,
+				Measures: sample.Measures,
 			})
 			return true
 		})
