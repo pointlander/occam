@@ -169,14 +169,15 @@ func NewNetwork(width, length int) *Network {
 
 // Entropy is the self entropy of a point
 type Entropy struct {
-	Entropy float32
-	Label   string
+	Entropy  float32
+	Label    string
+	Measures []float64
 }
 
 // GetEntropy returns the entropy of the network
 func (n *Network) GetEntropy(inputs []iris.Iris) []Entropy {
 	outputs := make([]Entropy, 0, len(inputs))
-	for i := 0; i < n.Length; i++ {
+	for i := 0; i < len(inputs); i++ {
 		// Load the input
 		sample := inputs[i]
 		for i, measure := range sample.Measures {
@@ -185,8 +186,9 @@ func (n *Network) GetEntropy(inputs []iris.Iris) []Entropy {
 		// Calculate the l1 output of the neural network
 		n.Cost(func(a *tf32.V) bool {
 			outputs = append(outputs, Entropy{
-				Entropy: a.X[0],
-				Label:   sample.Label,
+				Entropy:  a.X[0],
+				Label:    sample.Label,
+				Measures: sample.Measures,
 			})
 			return true
 		})

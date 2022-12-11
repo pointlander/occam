@@ -56,12 +56,64 @@ func main() {
 		}
 	}
 
+	sum := float32(0.0)
 	entropy := n.GetEntropy(fisher)
 	sort.Slice(entropy, func(i, j int) bool {
 		return entropy[i].Entropy > entropy[j].Entropy
 	})
 	for _, e := range entropy {
+		sum += e.Entropy
 		fmt.Printf("%.7f %s\n", e.Entropy, e.Label)
+	}
+
+	for i := 1; i < 150; i++ {
+		a := float32(0.0)
+		//n.Point.X = n.Point.X[:i*4]
+		//n.Point.S[1] = i
+		d := make([]iris.Iris, 0, 150)
+		for _, e := range entropy[:i] {
+			//for j, measure := range e.Measures {
+			//	n.Point.X[4*i+j] = float32(measure)
+			//}
+			d = append(d, iris.Iris{
+				Measures: e.Measures,
+				Label:    e.Label,
+			})
+		}
+		_ = d
+		e := n.GetEntropy(d)
+		for _, e := range e {
+			a += e.Entropy
+		}
+
+		b := float32(0.0)
+		//n.Point.X = n.Point.X[:(150-i)*4]
+		//n.Point.S[1] = 150 - i
+		d = make([]iris.Iris, 0, 150)
+		for _, e := range entropy[i:] {
+			//for j, measure := range e.Measures {
+			//	n.Point.X[4*i+j] = float32(measure)
+			//}
+			d = append(d, iris.Iris{
+				Measures: e.Measures,
+				Label:    e.Label,
+			})
+		}
+		_ = d
+		e = n.GetEntropy(d)
+		for _, e := range e {
+			b += e.Entropy
+		}
+		fmt.Println(i, sum, a, b, a+b, sum-(a+b))
+	}
+
+	n = occam.NewNetwork(4, length)
+
+	// Set point weights to the iris data
+	for i, value := range fisher {
+		for j, measure := range value.Measures {
+			n.Point.X[4*i+j] = float32(measure)
+		}
 	}
 
 	// The stochastic gradient descent loop
