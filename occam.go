@@ -169,9 +169,11 @@ func NewNetwork(width, length int) *Network {
 
 // Entropy is the self entropy of a point
 type Entropy struct {
-	Entropy  float32
-	Label    string
-	Measures []float64
+	Entropy   float32
+	Label     string
+	Measures  []float64
+	Index     int
+	Optimized float32
 }
 
 // GetEntropy returns the entropy of the network
@@ -189,6 +191,7 @@ func (n *Network) GetEntropy(inputs []iris.Iris) []Entropy {
 				Entropy:  a.X[0],
 				Label:    sample.Label,
 				Measures: sample.Measures,
+				Index:    i,
 			})
 			return true
 		})

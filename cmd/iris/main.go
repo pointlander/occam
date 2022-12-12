@@ -177,4 +177,18 @@ func main() {
 	n.Set.Save("set.w", 0, 0)
 
 	n.Analyzer(fisher)
+
+	entropy2 := n.GetEntropy(fisher)
+	for i, e := range entropy {
+		entropy[i].Optimized = entropy2[e.Index].Entropy
+	}
+	sort.Slice(entropy, func(i, j int) bool {
+		return (entropy[i].Entropy - entropy[i].Optimized) > (entropy[j].Entropy - entropy[j].Optimized)
+	})
+	for i, e := range entropy {
+		fmt.Printf("%3d %.7f %.7f %.7f %s\n", i, e.Entropy, e.Optimized, e.Entropy-e.Optimized, e.Label)
+		entropy[i].Entropy = e.Entropy - e.Optimized
+	}
+	splits2 := split(2, entropy, []int{})
+	fmt.Println(splits2)
 }
