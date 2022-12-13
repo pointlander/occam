@@ -142,15 +142,23 @@ func main() {
 	if *FlagNormalize {
 		epochs = 1024
 	}
+	indexes := make([]int, length)
+	for i := range indexes {
+		indexes[i] = i
+	}
 	for n.I < epochs {
-		// Randomly select a load the input
-		index := n.Rnd.Intn(length)
-		sample := fisher[index]
-		total := n.Iterate(sample.Measures)
+		n.Rnd.Shuffle(length, func(i, j int) {
+			indexes[i], indexes[j] = indexes[j], indexes[i]
+		})
+		for _, index := range indexes {
+			// Randomly select a load the input
+			sample := fisher[index]
+			total := n.Iterate(sample.Measures)
 
-		if math.IsNaN(float64(total)) {
-			fmt.Println(total)
-			break
+			if math.IsNaN(float64(total)) {
+				fmt.Println(total)
+				break
+			}
 		}
 	}
 
