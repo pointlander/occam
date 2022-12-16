@@ -65,6 +65,27 @@ func main() {
 		fmt.Printf("%3d %.7f %.7f %s\n", i, e.Entropy, last-e.Entropy, e.Label)
 		last = e.Entropy
 	}
+	gradients := n.GetGradients(fisher)
+	vectors := n.GetVectors2(fisher)
+
+	for i, grad := range gradients {
+		xy, x, y, x2, y2 := float32(0.0), float32(0.0), float32(0.0), float32(0.0), float32(0.0)
+		for i, grad := range grad {
+			grad = -grad
+			measure := float32(vectors[i].Measures[i])
+			xy += grad * measure
+			x += grad
+			y += measure
+			x2 += grad * grad
+			y2 += measure * measure
+		}
+		xy /= float32(len(gradients))
+		x /= float32(len(gradients))
+		y /= float32(len(gradients))
+		x2 /= float32(len(gradients))
+		y2 /= float32(len(gradients))
+		fmt.Println(i, (xy-x*y)/(float32(math.Sqrt(float64(x2-x*x)))*float32(math.Sqrt(float64(y2-y*y)))), grad, vectors[i].Measures)
+	}
 
 	var split func(depth int, entropy []occam.Entropy, splits []int) []int
 	split = func(depth int, entropy []occam.Entropy, splits []int) []int {

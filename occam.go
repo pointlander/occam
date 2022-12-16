@@ -199,6 +199,36 @@ func (n *Network) GetEntropy(inputs []iris.Iris) []Entropy {
 	return outputs
 }
 
+// GetGradients returns the gradients of the network
+func (n *Network) GetGradients(inputs []iris.Iris) [][]float32 {
+	for _, input := range inputs {
+		for i, measure := range input.Measures {
+			n.Input.X[i] = float32(measure)
+		}
+
+		// Calculate the gradients
+		tf32.Gradient(n.Cost)
+	}
+
+	gradients := make([][]float32, 0, n.Length)
+	for _, w := range n.Set.Weights {
+		grad := make([]float32, 0, n.Width)
+		for k, d := range w.D {
+			if k%n.Width == 0 && k != 0 {
+				gradients = append(gradients, grad)
+				grad = make([]float32, 0, n.Width)
+			}
+			grad = append(grad, d)
+		}
+		gradients = append(gradients, grad)
+	}
+
+	n.Set.Zero()
+	n.Others.Zero()
+
+	return gradients
+}
+
 // Iterate does a gradient descent operation
 func (n *Network) Iterate(data []float64) float32 {
 	for i, measure := range data {
@@ -245,6 +275,30 @@ func (n *Network) GetVectors(inputs []iris.Iris) []iris.Iris {
 		}
 		// Calculate the l1 output of the neural network
 		n.L1(func(a *tf32.V) bool {
+			vectors := make([]float64, len(a.X))
+			for i, x := range a.X {
+				vectors[i] = float64(x)
+			}
+			outputs = append(outputs, iris.Iris{
+				Measures: vectors,
+				Label:    sample.Label,
+			})
+			return true
+		})
+	}
+	return outputs
+}
+
+func (n *Network) GetVectors2(inputs []iris.Iris) []iris.Iris {
+	outputs := make([]iris.Iris, 0, len(inputs))
+	for i := 0; i < n.Length; i++ {
+		// Load the input
+		sample := inputs[i]
+		for i, measure := range sample.Measures {
+			n.Input.X[i] = float32(measure)
+		}
+		// Calculate the l1 output of the neural network
+		n.L2(func(a *tf32.V) bool {
 			vectors := make([]float64, len(a.X))
 			for i, x := range a.X {
 				vectors[i] = float64(x)
