@@ -158,6 +158,43 @@ func main() {
 	splits := split(2, entropy, []int{})
 	fmt.Println(splits)
 
+	nonlinear := entropy[:splits[0]]
+	for i := range nonlinear {
+		nonlinear[i].Index = i
+	}
+	type AB struct {
+		A, B uint
+	}
+	ab := make([]AB, len(nonlinear))
+	for i := 0; i < 1024; i++ {
+		data := make([]iris.Iris, 0, 8)
+		for _, e := range nonlinear {
+			measures := make([]float64, len(e.Measures))
+			for j, m := range e.Measures {
+				measures[j] = m + n.Rnd.NormFloat64()*0.1
+			}
+			data = append(data, iris.Iris{
+				Measures: measures,
+				Label:    e.Label,
+			})
+		}
+		entropy := n.GetEntropy(data)
+		sort.Slice(entropy, func(i, j int) bool {
+			return entropy[i].Entropy > entropy[j].Entropy
+		})
+		splits := split(1, entropy, []int{})
+		for j, e := range entropy {
+			if j < splits[0] {
+				ab[e.Index].A++
+			} else {
+				ab[e.Index].B++
+			}
+		}
+	}
+	for i, e := range nonlinear {
+		fmt.Println(i, e.Label, ab[e.Index].A, ab[e.Index].B)
+	}
+
 	// The stochastic gradient descent loop
 	epochs := 8 * 1024
 	if *FlagNormalize {
