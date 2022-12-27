@@ -62,6 +62,7 @@ func main() {
 	})
 	last := float32(0.0)
 	for i, e := range entropy {
+		entropy[i].Order = i
 		fmt.Printf("%3d %.7f %.7f %s\n", i, e.Entropy, last-e.Entropy, e.Label)
 		last = e.Entropy
 	}
@@ -87,8 +88,8 @@ func main() {
 		fmt.Println(i, (xy-x*y)/(float32(math.Sqrt(float64(x2-x*x)))*float32(math.Sqrt(float64(y2-y*y)))), grad, vectors[i].Measures)
 	}
 
-	var split func(depth int, entropy []occam.Entropy, splits []int) []int
-	split = func(depth int, entropy []occam.Entropy, splits []int) []int {
+	var split func(n *occam.Network, depth int, entropy []occam.Entropy, splits []int) []int
+	split = func(n *occam.Network, depth int, entropy []occam.Entropy, splits []int) []int {
 		if depth == 0 {
 			return splits
 		}
@@ -135,30 +136,31 @@ func main() {
 				index, max = i, gain
 			}
 		}
-		splits = append(splits, index)
+		splits = append(splits, entropy[index].Order)
 
-		dat := make([]iris.Iris, 0, 8)
+		/*dat := make([]iris.Iris, 0, 8)
 		for _, e := range entropy[index:] {
 			dat = append(dat, iris.Iris{
 				Measures: e.Measures,
 				Label:    e.Label,
 			})
-		}
-		splits = split(depth-1, n.GetEntropy(dat), splits)
+		}*/
+		splits = split(n, depth-1, entropy[index:], splits)
 
-		dat = make([]iris.Iris, 0, 8)
+		/*dat = make([]iris.Iris, 0, 8)
 		for _, e := range entropy[:index] {
 			dat = append(dat, iris.Iris{
 				Measures: e.Measures,
 				Label:    e.Label,
 			})
-		}
-		return split(depth-1, n.GetEntropy(dat), splits)
+		}*/
+		return split(n, depth-1, entropy[:index], splits)
 	}
-	splits := split(2, entropy, []int{})
+	splits := split(n, 2, entropy, []int{})
 	fmt.Println(splits)
 
-	nonlinear := entropy[:splits[0]]
+	nonlinear := make([]occam.Entropy, splits[0])
+	copy(nonlinear, entropy[:splits[0]])
 	for i := range nonlinear {
 		nonlinear[i].Index = i
 	}
@@ -178,11 +180,23 @@ func main() {
 				Label:    e.Label,
 			})
 		}
+
+		n := occam.NewNetwork(4, len(data))
+		// Set point weights to the iris data
+		for i, value := range data {
+			for j, measure := range value.Measures {
+				n.Point.X[4*i+j] = float32(measure)
+			}
+		}
+
 		entropy := n.GetEntropy(data)
 		sort.Slice(entropy, func(i, j int) bool {
 			return entropy[i].Entropy > entropy[j].Entropy
 		})
-		splits := split(1, entropy, []int{})
+		for j := range entropy {
+			entropy[j].Order = j
+		}
+		splits := split(n, 1, entropy, []int{})
 		for j, e := range entropy {
 			if j < splits[0] {
 				ab[e.Index].A++
@@ -193,6 +207,40 @@ func main() {
 	}
 	for i, e := range nonlinear {
 		fmt.Println(i, e.Label, ab[e.Index].A, ab[e.Index].B)
+	}
+
+	data := make([]iris.Iris, 0, 8)
+	for _, e := range nonlinear {
+		measures := make([]float64, len(e.Measures)+2)
+		copy(measures, e.Measures)
+		measures[len(e.Measures)] = float64(ab[e.Index].A) / 1024
+		measures[len(e.Measures)+1] = float64(ab[e.Index].B) / 1024
+		data = append(data, iris.Iris{
+			Measures: measures,
+			Label:    e.Label,
+		})
+	}
+	{
+		n := occam.NewNetwork(6, len(data))
+		// Set point weights to the iris data
+		for i, value := range data {
+			for j, measure := range value.Measures {
+				n.Point.X[6*i+j] = float32(measure)
+			}
+		}
+
+		entropy := n.GetEntropy(data)
+		sort.Slice(entropy, func(i, j int) bool {
+			return entropy[i].Entropy > entropy[j].Entropy
+		})
+		for j := range entropy {
+			entropy[j].Order = j
+		}
+		splits := split(n, 1, entropy, []int{})
+		for i, e := range entropy {
+			fmt.Printf("%3d %.7f %s\n", i, e.Entropy, e.Label)
+		}
+		fmt.Println(splits)
 	}
 
 	// The stochastic gradient descent loop
@@ -255,6 +303,6 @@ func main() {
 		fmt.Printf("%3d %.7f %.7f %.7f %s\n", i, e.Entropy, e.Optimized, e.Entropy-e.Optimized, e.Label)
 		entropy[i].Entropy = e.Entropy - e.Optimized
 	}
-	splits2 := split(2, entropy, []int{})
+	splits2 := split(n, 2, entropy, []int{})
 	fmt.Println(splits2)
 }

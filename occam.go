@@ -173,6 +173,7 @@ type Entropy struct {
 	Label     string
 	Measures  []float64
 	Index     int
+	Order     int
 	Optimized float32
 }
 
