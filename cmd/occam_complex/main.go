@@ -7,9 +7,9 @@ package main
 import (
 	"flag"
 	"fmt"
-	"math"
 	"math/cmplx"
 	"math/rand"
+	"sort"
 	"time"
 
 	"github.com/pointlander/datum/iris"
@@ -81,6 +81,7 @@ var (
 func main() {
 	flag.Parse()
 	rnd := rand.New(rand.NewSource(1))
+	_ = rnd
 
 	// Load the iris data set
 	datum, err := iris.Load()
@@ -96,10 +97,14 @@ func main() {
 	for _, value := range fisher {
 		measures := value.Measures
 		points.X = append(points.X,
-			cmplx.Rect(measures[0], rnd.Float64()*math.Pi),
-			cmplx.Rect(measures[1], rnd.Float64()*math.Pi),
-			cmplx.Rect(measures[2], rnd.Float64()*math.Pi),
-			cmplx.Rect(measures[3], rnd.Float64()*math.Pi),
+			/*cmplx.Rect(measures[0], rnd.Float64()*2*math.Pi),
+			cmplx.Rect(measures[1], rnd.Float64()*2*math.Pi),
+			cmplx.Rect(measures[2], rnd.Float64()*2*math.Pi),
+			cmplx.Rect(measures[3], rnd.Float64()*2*math.Pi),*/
+			complex(measures[0], measures[0]),
+			complex(measures[1], measures[1]),
+			complex(measures[2], measures[2]),
+			complex(measures[3], measures[3]),
 		)
 	}
 	points.States = make([][]complex128, StateTotal)
@@ -111,6 +116,30 @@ func main() {
 	l1 := softmax(tc128.Mul(set.Get("points"), set.Get("points")))
 	l2 := softmax(tc128.T(tc128.Mul(l1, tc128.T(set.Get("points")))))
 	cost := tc128.Entropy(l2)
+
+	type Item struct {
+		Label string
+		Rank  complex128
+	}
+	rank := func() {
+		items := make([]Item, 0, 8)
+		cost(func(a *tc128.V) bool {
+			for i := 0; i < length; i++ {
+				items = append(items, Item{
+					Label: fisher[i].Label,
+					Rank:  a.X[i],
+				})
+			}
+			return true
+		})
+		sort.Slice(items, func(i, j int) bool {
+			return cmplx.Abs(items[i].Rank) < cmplx.Abs(items[j].Rank)
+		})
+		for _, item := range items {
+			fmt.Printf("%.7f %.7f %s\n", cmplx.Abs(item.Rank), cmplx.Phase(item.Rank), item.Label)
+		}
+	}
+	rank()
 
 	loss := make(plotter.XYs, 0, 8)
 
@@ -153,6 +182,8 @@ func main() {
 		loss = append(loss, plotter.XY{X: float64(i), Y: float64(cmplx.Abs(total))})
 		i++
 	}
+
+	rank()
 
 	// Plot the cost
 	p := plot.New()
