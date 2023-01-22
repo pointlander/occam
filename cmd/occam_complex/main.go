@@ -7,7 +7,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"math"
 	"math/cmplx"
 	"math/rand"
 	"sort"
@@ -30,7 +29,7 @@ const (
 	// S is the scaling factor for the softmax
 	S = 1.0 - 1e-300
 	// Eta is the learning rate
-	Eta = .3
+	Eta = .1
 )
 
 const (
@@ -92,24 +91,38 @@ func main() {
 	fisher := datum.Fisher
 	width, length := 4, len(fisher)
 
+	averages := make([]float64, width)
+	for _, value := range fisher {
+		measures := value.Measures
+		for i, value := range measures {
+			averages[i] += value
+		}
+	}
+	for i, value := range averages {
+		averages[i] = value / float64(length)
+	}
+
 	others := tc128.NewSet()
 	others.Add("inputs", width, length)
 	inputs := others.ByName["inputs"]
 	for _, value := range fisher {
 		measures := value.Measures
-		inputs.X = append(inputs.X,
-			/*cmplx.Rect(measures[0], rnd.Float64()*2*math.Pi),
+		inputs.X = append(inputs.X, /*cmplx.Rect(measures[0], rnd.Float64()*2*math.Pi),
 			cmplx.Rect(measures[1], rnd.Float64()*2*math.Pi),
 			cmplx.Rect(measures[2], rnd.Float64()*2*math.Pi),
 			cmplx.Rect(measures[3], rnd.Float64()*2*math.Pi),*/
+			complex(measures[0], 0),
+			complex(measures[1], 0),
+			complex(measures[2], 0),
+			complex(measures[3], 0),
 			/*complex(measures[0], measures[0]),
 			complex(measures[1], measures[1]),
 			complex(measures[2], measures[2]),
 			complex(measures[3], measures[3]),*/
-			cmplx.Rect(measures[0], 0),
-			cmplx.Rect(measures[1], math.Pi/2),
-			cmplx.Rect(measures[2], math.Pi),
-			cmplx.Rect(measures[3], 3*math.Pi/2),
+			/*complex(measures[0], measures[0]-averages[0]),
+			complex(measures[1], measures[1]-averages[1]),
+			complex(measures[2], measures[2]-averages[2]),
+			complex(measures[3], measures[3]-averages[3]),*/
 		)
 	}
 
@@ -123,14 +136,18 @@ func main() {
 			cmplx.Rect(measures[1], rnd.Float64()*2*math.Pi),
 			cmplx.Rect(measures[2], rnd.Float64()*2*math.Pi),
 			cmplx.Rect(measures[3], rnd.Float64()*2*math.Pi),*/
+			complex(measures[0], 0),
+			complex(measures[1], 0),
+			complex(measures[2], 0),
+			complex(measures[3], 0),
 			/*complex(measures[0], measures[0]),
 			complex(measures[1], measures[1]),
 			complex(measures[2], measures[2]),
 			complex(measures[3], measures[3]),*/
-			cmplx.Rect(measures[0], 0),
-			cmplx.Rect(measures[1], math.Pi/2),
-			cmplx.Rect(measures[2], math.Pi),
-			cmplx.Rect(measures[3], 3*math.Pi/2),
+			/*complex(measures[0], measures[0]-averages[0]),
+			complex(measures[1], measures[1]-averages[1]),
+			complex(measures[2], measures[2]-averages[2]),
+			complex(measures[3], measures[3]-averages[3]),*/
 		)
 	}
 	weights.States = make([][]complex128, StateTotal)
@@ -141,7 +158,8 @@ func main() {
 	softmax := tc128.U(SphericalSoftmax)
 	l1 := softmax(tc128.Mul(set.Get("weights"), others.Get("inputs")))
 	l2 := softmax(tc128.T(tc128.Mul(l1, tc128.T(set.Get("weights")))))
-	cost := tc128.Entropy(l2)
+	entropy := tc128.Entropy(l2)
+	cost := tc128.Avg(entropy)
 
 	type Item struct {
 		Label string
@@ -149,7 +167,7 @@ func main() {
 	}
 	rank := func() {
 		items := make([]Item, 0, 8)
-		cost(func(a *tc128.V) bool {
+		entropy(func(a *tc128.V) bool {
 			for i := 0; i < length; i++ {
 				items = append(items, Item{
 					Label: fisher[i].Label,
@@ -175,7 +193,7 @@ func main() {
 	}
 
 	// The stochastic gradient descent loop
-	for i < 8*1024 {
+	for i < 1024 {
 		start := time.Now()
 		// Calculate the gradients
 		total := tc128.Gradient(cost).X[0]
