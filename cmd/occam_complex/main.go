@@ -7,6 +7,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"math"
 	"math/cmplx"
 	"math/rand"
 	"sort"
@@ -29,7 +30,7 @@ const (
 	// S is the scaling factor for the softmax
 	S = 1.0 - 1e-300
 	// Eta is the learning rate
-	Eta = .001
+	Eta = .3
 )
 
 const (
@@ -91,30 +92,55 @@ func main() {
 	fisher := datum.Fisher
 	width, length := 4, len(fisher)
 
-	set := tc128.NewSet()
-	set.Add("points", width, length)
-	points := set.ByName["points"]
+	others := tc128.NewSet()
+	others.Add("inputs", width, length)
+	inputs := others.ByName["inputs"]
 	for _, value := range fisher {
 		measures := value.Measures
-		points.X = append(points.X,
+		inputs.X = append(inputs.X,
 			/*cmplx.Rect(measures[0], rnd.Float64()*2*math.Pi),
 			cmplx.Rect(measures[1], rnd.Float64()*2*math.Pi),
 			cmplx.Rect(measures[2], rnd.Float64()*2*math.Pi),
 			cmplx.Rect(measures[3], rnd.Float64()*2*math.Pi),*/
-			complex(measures[0], measures[0]),
+			/*complex(measures[0], measures[0]),
 			complex(measures[1], measures[1]),
 			complex(measures[2], measures[2]),
-			complex(measures[3], measures[3]),
+			complex(measures[3], measures[3]),*/
+			cmplx.Rect(measures[0], 0),
+			cmplx.Rect(measures[1], math.Pi/2),
+			cmplx.Rect(measures[2], math.Pi),
+			cmplx.Rect(measures[3], 3*math.Pi/2),
 		)
 	}
-	points.States = make([][]complex128, StateTotal)
-	for i := range points.States {
-		points.States[i] = make([]complex128, len(points.X))
+
+	set := tc128.NewSet()
+	set.Add("weights", width, length)
+	weights := set.ByName["weights"]
+	for _, value := range fisher {
+		measures := value.Measures
+		weights.X = append(weights.X,
+			/*cmplx.Rect(measures[0], rnd.Float64()*2*math.Pi),
+			cmplx.Rect(measures[1], rnd.Float64()*2*math.Pi),
+			cmplx.Rect(measures[2], rnd.Float64()*2*math.Pi),
+			cmplx.Rect(measures[3], rnd.Float64()*2*math.Pi),*/
+			/*complex(measures[0], measures[0]),
+			complex(measures[1], measures[1]),
+			complex(measures[2], measures[2]),
+			complex(measures[3], measures[3]),*/
+			cmplx.Rect(measures[0], 0),
+			cmplx.Rect(measures[1], math.Pi/2),
+			cmplx.Rect(measures[2], math.Pi),
+			cmplx.Rect(measures[3], 3*math.Pi/2),
+		)
+	}
+	weights.States = make([][]complex128, StateTotal)
+	for i := range weights.States {
+		weights.States[i] = make([]complex128, len(weights.X))
 	}
 
 	softmax := tc128.U(SphericalSoftmax)
-	l1 := softmax(tc128.Mul(set.Get("points"), set.Get("points")))
-	l2 := softmax(tc128.T(tc128.Mul(l1, tc128.T(set.Get("points")))))
+	l1 := softmax(tc128.Mul(set.Get("weights"), others.Get("inputs")))
+	l2 := softmax(tc128.T(tc128.Mul(l1, tc128.T(set.Get("weights")))))
 	cost := tc128.Entropy(l2)
 
 	type Item struct {
@@ -141,7 +167,7 @@ func main() {
 	}
 	rank()
 
-	loss := make(plotter.XYs, 0, 8)
+	points := make(plotter.XYs, 0, 8)
 
 	i := 1
 	pow := func(x complex128) complex128 {
@@ -149,7 +175,7 @@ func main() {
 	}
 
 	// The stochastic gradient descent loop
-	for i < 1024 {
+	for i < 8*1024 {
 		start := time.Now()
 		// Calculate the gradients
 		total := tc128.Gradient(cost).X[0]
@@ -179,7 +205,7 @@ func main() {
 			break
 		}
 
-		loss = append(loss, plotter.XY{X: float64(i), Y: float64(cmplx.Abs(total))})
+		points = append(points, plotter.XY{X: float64(i), Y: float64(cmplx.Abs(total))})
 		i++
 	}
 
@@ -192,7 +218,7 @@ func main() {
 	p.X.Label.Text = "epochs"
 	p.Y.Label.Text = "cost"
 
-	scatter, err := plotter.NewScatter(loss)
+	scatter, err := plotter.NewScatter(points)
 	if err != nil {
 		panic(err)
 	}
