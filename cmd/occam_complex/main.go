@@ -7,6 +7,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"math"
 	"math/cmplx"
 	"math/rand"
 	"sort"
@@ -14,6 +15,8 @@ import (
 
 	"github.com/pointlander/datum/iris"
 	"github.com/pointlander/gradient/tc128"
+	"github.com/pointlander/gradient/tf32"
+	"github.com/pointlander/occam"
 
 	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"
@@ -185,6 +188,128 @@ func main() {
 	}
 	rank()
 
+	correct := 0
+	l2(func(a *tc128.V) bool {
+		others := tf32.NewSet()
+		others.Add("inputs", width, length)
+		inputs := others.ByName["inputs"]
+		for _, value := range a.X {
+			inputs.X = append(inputs.X, float32(cmplx.Abs(value)))
+		}
+		others.Add("targets", 3, length)
+		targets := others.ByName["targets"]
+		targets.X = targets.X[:cap(targets.X)]
+		for i := 0; i < length; i++ {
+			targets.X[i*3+iris.Labels[fisher[i].Label]] = 1
+		}
+
+		set := tf32.NewSet()
+		set.Add("weights", width, 3)
+		weights := set.ByName["weights"]
+		factor := math.Sqrt(2.0 / float64(weights.S[0]))
+		for i := 0; i < cap(weights.X); i++ {
+			weights.X = append(weights.X, float32(rnd.NormFloat64()*factor))
+		}
+		weights.States = make([][]float32, StateTotal)
+		for i := range weights.States {
+			weights.States[i] = make([]float32, len(weights.X))
+		}
+		set.Add("bias", 3, 1)
+		bias := set.ByName["bias"]
+		bias.X = bias.X[:cap(bias.X)]
+		bias.States = make([][]float32, StateTotal)
+		for i := range bias.States {
+			bias.States[i] = make([]float32, len(bias.X))
+		}
+
+		softmax := tf32.U(occam.SphericalSoftmax)
+		l1 := softmax(tf32.Add(tf32.Mul(set.Get("weights"), others.Get("inputs")), set.Get("bias")))
+		cost := tf32.Avg(tf32.CrossEntropy(l1, others.Get("targets")))
+
+		i := 1
+		pow := func(x float32) float32 {
+			return float32(math.Pow(float64(x), float64(i)))
+		}
+
+		points := make(plotter.XYs, 0, 8)
+
+		// The stochastic gradient descent loop
+		for i < 8*1024 {
+			start := time.Now()
+			// Calculate the gradients
+			total := tf32.Gradient(cost).X[0]
+
+			// Update the point weights with the partial derivatives using adam
+			b1, b2 := pow(B1), pow(B2)
+			for j, w := range set.Weights {
+				for k, d := range w.D {
+					g := d
+					m := B1*w.States[StateM][k] + (1-B1)*g
+					v := B2*w.States[StateV][k] + (1-B2)*g*g
+					w.States[StateM][k] = m
+					w.States[StateV][k] = v
+					mhat := m / (1 - b1)
+					vhat := v / (1 - b2)
+					set.Weights[j].X[k] -= Eta * mhat / float32(math.Sqrt(float64(vhat))+1e-8)
+				}
+			}
+
+			// Housekeeping
+			end := time.Since(start)
+			fmt.Println(i, total, end)
+			set.Zero()
+			others.Zero()
+
+			if math.IsNaN(float64(total)) {
+				fmt.Println(total)
+				break
+			}
+
+			points = append(points, plotter.XY{X: float64(i), Y: float64(total)})
+			i++
+		}
+
+		fmt.Println("----------------------------------------------------------")
+		l1(func(a *tf32.V) bool {
+			for i := 0; i < length; i++ {
+				x, index, max := a.X[i*3:i*3+3], 0, float32(0.0)
+				for i, value := range x {
+					if value > max {
+						index, max = i, value
+					}
+				}
+				expected := iris.Labels[fisher[i].Label]
+				fmt.Println(i, index, expected)
+				if index == expected {
+					correct++
+				}
+			}
+			return true
+		})
+		fmt.Println("----------------------------------------------------------")
+
+		// Plot the cost
+		p := plot.New()
+
+		p.Title.Text = "epochs vs cost"
+		p.X.Label.Text = "epochs"
+		p.Y.Label.Text = "cost"
+
+		scatter, err := plotter.NewScatter(points)
+		if err != nil {
+			panic(err)
+		}
+		scatter.GlyphStyle.Radius = vg.Length(1)
+		scatter.GlyphStyle.Shape = draw.CircleGlyph{}
+		p.Add(scatter)
+
+		err = p.Save(8*vg.Inch, 8*vg.Inch, "occam_top_complex_cost.png")
+		if err != nil {
+			panic(err)
+		}
+		return true
+	})
+
 	points := make(plotter.XYs, 0, 8)
 
 	i := 1
@@ -250,4 +375,6 @@ func main() {
 	}
 
 	set.Save("occam_complex_set.w", 0, 0)
+
+	fmt.Println("correct", correct, float64(correct)/150)
 }
